@@ -17,21 +17,21 @@
 /* 사용자 요청: 제목/부제를 좁은 폭에 담아 2줄로 자연스럽게 줄바꿈시킨다(빈 공간을
    AI 설정 쪽에 더 몰아주기 위함). */
 .app-header .app-title-block {
-  flex: 0 1 420px;
-  min-width: 260px;
+  flex: 0 1 360px;
+  min-width: 240px;
 }
 
 .app-header .app-title-block .subtitle {
   word-break: keep-all;
 }
 
-/* 사용자 요청: AI 설정 박스는 화면 전체를 채우지 않고 적당한 폭으로, 내부는
-   입력 항목(1행)/버튼(2행)으로 나눠 2줄로 공간 효율적으로 배치한다. */
+/* 사용자 요청: AI 설정 박스를 세로로 늘리지 말고(입력 1행 + 버튼 1행, 총 2행 유지)
+   대신 우측으로 더 넓혀서 입력칸이 겹치지 않게 정리한다. */
 .app-header .ai-settings-panel {
-  flex: 0 1 480px;
-  width: 480px;
+  flex: 1 1 760px;
+  width: auto;
   margin: 0;
-  padding: 10px 16px;
+  padding: 10px 20px;
 }
 
 .app-header .ai-settings-panel h3 {
@@ -39,9 +39,9 @@
 }
 
 .app-header .ai-settings-panel .ai-settings-row {
-  gap: 10px;
+  gap: 16px;
   align-items: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-bottom: 8px;
 }
 
@@ -51,14 +51,22 @@
 
 .app-header .ai-settings-panel .ai-settings-actions {
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .app-header .ai-settings-panel .upload-row label {
-  flex: 1 1 120px;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 130px;
+}
+
+.app-header .ai-settings-panel .upload-row label:nth-child(2) {
+  flex: 2 1 0;
 }
 
 .app-header .ai-settings-panel .upload-row select,
 .app-header .ai-settings-panel .upload-row input[type="password"] {
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
 }
