@@ -108,6 +108,8 @@ export default function ValidationApp() {
   };
 
   // ---- 실제 STEP1~10 파이프라인을 그대로 호출하는 executor. 검증 로직이 분석 로직을 우회하지 않는다. ----
+  // 테스트가 1건뿐이면 runAll의 "N/M건" 진행률은 끝날 때까지 0/1에 머물러 아무 정보가 안 되므로,
+  // 보고서 분석 화면(UploadPanel)과 동일하게 이 실행 하나 안에서의 단계별 진행 상황도 보여준다.
   const executeAnalysis = async (
     testCase: TestCase
   ): Promise<{ aiDamages: DamageRecord[]; aiPhotos: ExtractedPhoto[]; processingTimeMs: number; tokenUsage: TokenUsage }> => {
@@ -117,12 +119,27 @@ export default function ValidationApp() {
     if (!aiStatus.ready) throw new Error(aiStatus.reason ?? "AI Provider가 연결되지 않았습니다.");
 
     const start = Date.now();
-    const pages = await extractPdfText(stored.report);
+    setStatus(`${testCase.id}: PDF에서 텍스트 추출 중... (0/?페이지)`);
+    const pages = await extractPdfText(stored.report, (page, total) =>
+      setStatus(`${testCase.id}: PDF에서 텍스트 추출 중... (${page}/${total}페이지)`)
+    );
     const text = formatPagesForPrompt(pages);
-    const groups = await getActiveProvider().analyzeDocument(text);
+
+    const aiStart = Date.now();
+    setStatus(`${testCase.id}: AI로 손상 그룹 분석 중... (0초 경과)`);
+    const timer = setInterval(() => setStatus(`${testCase.id}: AI로 손상 그룹 분석 중... (${Math.round((Date.now() - aiStart) / 1000)}초 경과)`), 1000);
+    let groups;
+    try {
+      groups = await getActiveProvider().analyzeDocument(text);
+    } finally {
+      clearInterval(timer);
+    }
     const rawRecords = expandAllGroups(groups);
     const merged = mergeDuplicates(rawRecords);
-    const photos = await extractPhotosFromPdf(stored.report);
+    setStatus(`${testCase.id}: PDF에서 사진 후보 추출 중... (0/?페이지)`);
+    const photos = await extractPhotosFromPdf(stored.report, (page, total) =>
+      setStatus(`${testCase.id}: PDF에서 사진 후보 추출 중... (${page}/${total}페이지)`)
+    );
     const matched = matchPhotosToDamages(merged, photos);
 
     let finalDamages = matched.damages;
