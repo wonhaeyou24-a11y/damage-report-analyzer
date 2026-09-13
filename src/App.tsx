@@ -296,31 +296,32 @@ export default function App() {
 
           {activeReport ? (
             <>
-              {/* 사용자 요청: "최종 결과"(출력 버튼)를 "최종 검토/검수" 옆에 나란히 배치. */}
-              <div className="top-panels-row">
-                <FinalReviewBar
-                  session={activeReport.session}
-                  onSessionChange={handleSessionChange}
-                  records={activeReport.records}
-                  onRecordsChange={handleReanalyzeRecordsChange}
-                  photos={activeReport.photos}
-                  onPhotosChange={handlePhotosChange}
-                  documents={activeReport.documents}
-                  candidateDamages={activeReport.candidateDamages}
-                  onFilterSelect={(f) => {
-                    setReviewFilter(f);
-                    setTab(f === "photoReview" ? "photos" : "damages");
-                  }}
-                />
-                <FinalOutputPanel
-                  session={activeReport.session}
-                  records={activeReport.records}
-                  photos={activeReport.photos}
-                  candidateDamages={activeReport.candidateDamages}
-                  history={activeReport.exportHistory}
-                  onHistoryChange={(exportHistory) => updateActiveReport({ exportHistory })}
-                />
-              </div>
+              {/* 사용자 요청: 별도 "최종 결과" 박스를 없애고, 출력(Excel/Word/PDF) 버튼을
+                  재분석/검수완료/최종확정 버튼 밑에 이어서 배치한다(중복되던 손상/사진 건수 표시는 제거). */}
+              <FinalReviewBar
+                session={activeReport.session}
+                onSessionChange={handleSessionChange}
+                records={activeReport.records}
+                onRecordsChange={handleReanalyzeRecordsChange}
+                photos={activeReport.photos}
+                onPhotosChange={handlePhotosChange}
+                documents={activeReport.documents}
+                candidateDamages={activeReport.candidateDamages}
+                onFilterSelect={(f) => {
+                  setReviewFilter(f);
+                  setTab(f === "photoReview" ? "photos" : "damages");
+                }}
+                outputActions={
+                  <FinalOutputPanel
+                    session={activeReport.session}
+                    records={activeReport.records}
+                    photos={activeReport.photos}
+                    candidateDamages={activeReport.candidateDamages}
+                    history={activeReport.exportHistory}
+                    onHistoryChange={(exportHistory) => updateActiveReport({ exportHistory })}
+                  />
+                }
+              />
 
               <AdditionalDataPanel
                 damages={activeReport.records}

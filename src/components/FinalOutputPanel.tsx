@@ -7,7 +7,6 @@ import { buildWordDocumentBuffer, wordFileName } from "../lib/report/exportWord"
 import { buildPdfArrayBuffer, pdfFileName } from "../lib/report/exportPdf";
 import { downloadBytes, MIME_TYPES } from "../lib/report/downloadFile";
 import { buildHistoryEntry } from "../lib/report/exportHistory";
-import { getFinalizedDamageRecords, getFinalizedPhotoRecords } from "../lib/finalReview";
 import type { ExportHistoryEntry } from "../types";
 
 interface Props {
@@ -28,8 +27,6 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
   const [blockedReasons, setBlockedReasons] = useState<string[] | null>(null);
   const [lastResult, setLastResult] = useState<Record<ExportFormat, "success" | "failed" | null>>({ excel: null, word: null, pdf: null });
 
-  const finalizedDamages = getFinalizedDamageRecords(records);
-  const finalizedPhotos = getFinalizedPhotoRecords(photos);
   const locked = session.finalReviewStatus === "in_progress";
 
   const applyScope = (): ExportOptions => {
@@ -75,15 +72,10 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
   };
 
   return (
-    <div className="final-output-panel final-output-panel-compact">
-      <h2>최종 결과</h2>
-      {/* 검수 진행 상태/전체 건수는 옆의 "최종 검토/검수"에 이미 표시된다 — 여기서는 반복하지 않고
-          실제 출력 대상(제외된 항목 제외)만 한 줄로 보여준다. 사용자 요청: 여기는 출력 버튼 위주로,
-          세부 옵션/이력은 접어서 필요할 때만 펼친다. */}
-      <p className="final-output-counts">
-        손상 {finalizedDamages.length}건 · 사진 {finalizedPhotos.length}건
-      </p>
-
+    <>
+      {/* 사용자 요청: "최종 결과" 박스를 없애고(옆의 "최종 검토/검수"와 건수가 중복이었음),
+          출력 버튼만 재분석/검수완료/최종확정 버튼 밑에 이어서 배치한다. 손상/사진 건수는
+          이미 왼쪽 "전체 손상 N건 · 사진 없음 N건" 등에 표시되므로 여기서는 반복하지 않는다. */}
       {locked && <p className="hint">최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)</p>}
 
       {blockedReasons && (
@@ -183,6 +175,6 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
           </>
         )}
       </details>
-    </div>
+    </>
   );
 }

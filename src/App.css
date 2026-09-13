@@ -8,16 +8,22 @@
 
 .app-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
 
+.app-header h1,
+.app-header .subtitle {
+  flex: 0 0 auto;
+}
+
+/* 사용자 요청: 상단 빈 공간을 활용해 AI 설정 박스를 좌우로 넓게 — 제목 영역 옆 나머지
+   너비를 전부 차지하고, 내부 항목(Provider/Key/Model/버튼)도 한 줄로 넓게 펼친다. */
 .app-header .ai-settings-panel {
+  flex: 1 1 480px;
   margin: 0;
-  max-width: 380px;
-  padding: 10px 14px;
+  padding: 10px 16px;
 }
 
 .app-header .ai-settings-panel h3 {
@@ -25,7 +31,13 @@
 }
 
 .app-header .ai-settings-panel .upload-row {
-  gap: 8px;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.app-header .ai-settings-panel .upload-row input[type="password"] {
+  min-width: 260px;
 }
 
 header h1 {
@@ -394,22 +406,12 @@ button:disabled {
   padding-left: 18px;
 }
 
-.top-panels-row {
-  display: flex;
-  gap: 16px;
-  align-items: stretch;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.top-panels-row .final-review-bar {
-  flex: 1 1 480px;
-  margin-bottom: 0;
-}
-
-.top-panels-row .final-output-panel-compact {
-  flex: 0 0 280px;
-  margin-top: 0;
+/* 사용자 요청: "최종 결과" 박스를 없애고, 출력 버튼을 재분석/검수완료/최종확정 버튼 밑에
+   이어서 배치 — final-review-bar(어두운 남색 배경) 안에 녹색 포인트만 남긴 인라인 영역. */
+.final-output-inline {
+  margin: 0 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid #22345a;
 }
 
 .final-output-options-details {
@@ -418,26 +420,7 @@ button:disabled {
 
 .final-output-options-details summary {
   cursor: pointer;
-}
-
-.final-output-panel {
-  background: #0f2418;
-  color: white;
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 20px;
-}
-
-.final-output-panel h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-}
-
-.final-output-counts {
-  display: flex;
-  gap: 16px;
-  font-size: 13px;
-  margin-bottom: 12px;
+  color: #cde8d8;
 }
 
 .final-output-options {
@@ -457,6 +440,17 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.final-review-bar .final-output-scope input,
+.final-review-bar .status-line,
+.final-review-bar .hint {
+  color: inherit;
+}
+
+.final-review-bar .final-output-scope input {
+  border: 1px solid #33456a;
+  background: #16294a;
 }
 
 .final-output-actions {

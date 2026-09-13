@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { CandidateDamage, DamageRecord, ExtractedPhoto, ReviewSession } from "../types";
 import { canFinalize, computeReviewCounts, finalizeReview, markReviewCompleted } from "../lib/finalReview";
 import { matchPhotosToDamages } from "../lib/matchPhotos";
@@ -16,6 +16,9 @@ interface Props {
   documents: AdditionalDocument[];
   candidateDamages: CandidateDamage[];
   onFilterSelect: (filter: ReviewFilter) => void;
+  /** 사용자 요청: 출력(Excel/Word/PDF) 버튼을 재분석/검수완료/최종확정 버튼 바로 밑에 배치 —
+      별도 박스("최종 결과") 없이 이 바 안에서 이어서 보여준다. */
+  outputActions?: ReactNode;
 }
 
 /**
@@ -32,6 +35,7 @@ export default function FinalReviewBar({
   documents,
   candidateDamages,
   onFilterSelect,
+  outputActions,
 }: Props) {
   const [checkResult, setCheckResult] = useState<{ ok: boolean; reasons: string[] } | null>(null);
   const counts = useMemo(() => computeReviewCounts(records, photos, candidateDamages), [records, photos, candidateDamages]);
@@ -85,6 +89,8 @@ export default function FinalReviewBar({
           </button>
         </div>
       </div>
+
+      {outputActions && <div className="final-output-inline">{outputActions}</div>}
 
       <div className="final-review-counts">
         <button onClick={() => onFilterSelect("all")}>전체 손상 {counts.total}건</button>
