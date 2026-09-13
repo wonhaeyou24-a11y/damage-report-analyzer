@@ -1,0 +1,426 @@
+.app {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+  color: #1a1a1a;
+}
+
+header h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  color: #555;
+  font-size: 13px;
+}
+
+.upload-panel {
+  background: #f7f7f9;
+  border: 1px solid #e0e0e6;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.upload-row label {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 4px;
+  color: #333;
+}
+
+.upload-row input[type="password"],
+.upload-row input[type="file"] {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-width: 220px;
+}
+
+button {
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid #4a5cff;
+  background: #4a5cff;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+button.secondary {
+  background: white;
+  color: #4a5cff;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-line {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #333;
+}
+
+.empty-state {
+  color: #777;
+  text-align: center;
+  padding: 60px 0;
+}
+
+.damage-table .toolbar {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbar-group button {
+  background: white;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.toolbar-group button.active {
+  background: #4a5cff;
+  color: white;
+  border-color: #4a5cff;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.search-box {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #4a5cff;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+
+.link-btn.danger {
+  color: #d33;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  min-width: 320px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.photo-thumb {
+  width: 120px;
+  text-align: center;
+  font-size: 11px;
+}
+
+.photo-thumb img {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.match-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  color: #333;
+  background: #f0f2ff;
+  border: 1px solid #dbe0ff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.match-stats .divider {
+  color: #ccc;
+  margin: 0 4px;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab-bar button {
+  background: white;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+.tab-bar button.active {
+  background: #4a5cff;
+  color: white;
+  border-color: #4a5cff;
+}
+
+.photo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.photo-table th,
+.photo-table td {
+  border: 1px solid #e0e0e6;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.photo-table th {
+  background: #f7f7f9;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  background: #f0f2ff;
+}
+
+.hint {
+  color: #777;
+  font-size: 12px;
+  margin: 4px 0 12px;
+}
+
+.additional-data-panel {
+  background: #fafaf5;
+  border: 1px solid #ece8d5;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.additional-data-panel h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.secondary-upload {
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.pending-file-list,
+.attached-doc-list,
+.candidate-damage-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.pending-file-list li,
+.attached-doc-list li,
+.candidate-damage-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.final-review-bar {
+  background: #10203a;
+  color: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.final-review-bar h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.final-review-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.final-review-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+}
+
+.final-review-meta input {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #33456a;
+  background: #16294a;
+  color: white;
+  min-width: 120px;
+}
+
+.review-status-badge {
+  font-size: 12px;
+  background: #33456a;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.final-review-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.final-review-actions button {
+  background: #4a5cff;
+  border: none;
+}
+
+.final-review-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.final-review-counts button {
+  background: #16294a;
+  border: 1px solid #33456a;
+  color: white;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.final-review-counts button:hover {
+  background: #22345a;
+}
+
+.final-review-check-fail {
+  margin-top: 12px;
+  background: #4a1620;
+  border: 1px solid #7a2a38;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.final-review-check-fail ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.final-output-panel {
+  background: #0f2418;
+  color: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.final-output-panel h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.final-output-counts {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.final-output-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.final-output-scope {
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.final-output-scope label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.final-output-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.final-output-actions button {
+  background: #2f9e5c;
+  border: none;
+}
+
+.export-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  font-size: 12px;
+  color: #cde8d8;
+}
+
+.export-history-list li {
+  padding: 3px 0;
+}
