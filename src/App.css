@@ -25,10 +25,10 @@
   word-break: keep-all;
 }
 
-/* 사용자 요청: AI 설정 박스를 세로로 늘리지 말고(입력 1행 + 버튼 1행, 총 2행 유지)
-   대신 우측으로 더 넓혀서 입력칸이 겹치지 않게 정리한다. */
+/* 사용자 요청: 아래 공간을 확보할 수 있게 입력칸(Provider/Key/Model)과 버튼들을
+   한 줄로 합친다 — 박스를 더 넓혀 겹치지 않게 하고, 버튼은 줄어들지 않게 고정폭. */
 .app-header .ai-settings-panel {
-  flex: 1 1 760px;
+  flex: 1 1 900px;
   width: auto;
   margin: 0;
   padding: 10px 20px;
@@ -39,18 +39,8 @@
 }
 
 .app-header .ai-settings-panel .ai-settings-row {
-  gap: 16px;
+  gap: 12px;
   align-items: flex-end;
-  flex-wrap: nowrap;
-  margin-bottom: 8px;
-}
-
-.app-header .ai-settings-panel .ai-settings-row:last-of-type {
-  margin-bottom: 0;
-}
-
-.app-header .ai-settings-panel .ai-settings-actions {
-  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -69,6 +59,10 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
+}
+
+.app-header .ai-settings-panel .upload-row button {
+  flex: 0 0 auto;
 }
 
 header h1 {
