@@ -1,12 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko" translate="no">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 브라우저 자동 번역이 React가 그린 DOM을 직접 수정하면 React의 재조정(reconciliation)과
+         충돌해 "insertBefore" 류의 크래시가 난다(React #11538과 동일 유형). 이 페이지는 이미
+         한국어이므로 번역 자체가 불필요해 명시적으로 막는다. -->
+    <meta name="google" content="notranslate" />
     <title>damage-report-analyzer</title>
   </head>
-  <body>
+  <body class="notranslate">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
