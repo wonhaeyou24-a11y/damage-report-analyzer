@@ -38,14 +38,34 @@ function resolveApiKey(bodyKey: string | undefined): string {
 }
 
 /** Gemini/네트워크 오류를 사용자가 이해할 수 있는 한국어 메시지로 변환한다(스펙 13번). API Key
- * 원문이나 Gemini의 원시 오류 바디는 그대로 노출하지 않는다. */
-function mapErrorMessage(status: number): string {
-  if (status === 400) return "Gemini API Key 또는 요청 형식이 올바르지 않습니다.";
-  if (status === 401 || status === 403) return "Gemini 인증에 실패했습니다. API Key를 확인해주세요.";
-  if (status === 404) return "선택한 Gemini 모델을 사용할 수 없습니다.";
-  if (status === 429) return "Gemini API 사용 한도에 도달했습니다.";
-  if (status >= 500) return "AI 서버 처리 중 오류가 발생했습니다.";
-  return `Gemini 요청이 실패했습니다. (${status})`;
+ * 원문은 절대 포함하지 않는다. Gemini가 자기 서비스에 대해 돌려준 오류 메시지(예: "모델이
+ * 과부하 상태입니다")는 API Key를 포함하지 않는 안전한 진단 정보이므로, 있으면 괄호로 덧붙여
+ * 사용자가 원인을 바로 알 수 있게 한다(스펙 13번 "이해하기 쉬운 메시지"와 실사용 진단성을 절충). */
+function mapErrorMessage(status: number, detail?: string): string {
+  const base =
+    status === 400
+      ? "Gemini API Key 또는 요청 형식이 올바르지 않습니다."
+      : status === 401 || status === 403
+        ? "Gemini 인증에 실패했습니다. API Key를 확인해주세요."
+        : status === 404
+          ? "선택한 Gemini 모델을 사용할 수 없습니다."
+          : status === 429
+            ? "Gemini API 사용 한도에 도달했습니다."
+            : status >= 500
+              ? "AI 서버(Gemini) 처리 중 오류가 발생했습니다."
+              : `Gemini 요청이 실패했습니다. (${status})`;
+  return detail ? `${base} (Gemini 응답: ${detail})` : base;
+}
+
+/** Gemini 오류 응답 바디에서 API Key를 노출하지 않는 진단 메시지만 뽑아낸다. */
+function extractGeminiErrorDetail(rawText: string): string | undefined {
+  try {
+    const parsed = JSON.parse(rawText) as { error?: { message?: string; status?: string } };
+    const message = parsed.error?.message;
+    return typeof message === "string" ? message.slice(0, 300) : undefined;
+  } catch {
+    return rawText ? rawText.slice(0, 300) : undefined;
+  }
 }
 
 async function safeReadText(res: Response): Promise<string> {
@@ -80,8 +100,10 @@ export async function handleGeminiRequest(input: GeminiRequestBody): Promise<Han
     if (input.action === "listModels") {
       const res = await fetch(`${GEMINI_API_BASE}/models?key=${encodeURIComponent(apiKey)}`);
       if (!res.ok) {
-        await safeReadText(res);
-        return { status: res.status, body: { error: mapErrorMessage(res.status) } };
+        const rawText = await safeReadText(res);
+        const detail = extractGeminiErrorDetail(rawText);
+        console.error(`[gemini] listModels 실패 (status ${res.status}):`, detail ?? "(본문 없음)");
+        return { status: res.status, body: { error: mapErrorMessage(res.status, detail) } };
       }
       const data = (await res.json()) as GeminiModelsResponse;
       const models = (data.models ?? [])
@@ -109,8 +131,10 @@ export async function handleGeminiRequest(input: GeminiRequestBody): Promise<Han
         }
       );
       if (!res.ok) {
-        await safeReadText(res);
-        return { status: res.status, body: { error: mapErrorMessage(res.status) } };
+        const rawText = await safeReadText(res);
+        const detail = extractGeminiErrorDetail(rawText);
+        console.error(`[gemini] ${input.action} 실패 (status ${res.status}, model ${input.model}):`, detail ?? "(본문 없음)");
+        return { status: res.status, body: { error: mapErrorMessage(res.status, detail) } };
       }
       const data = (await res.json()) as GeminiGenerateResponse;
       const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
