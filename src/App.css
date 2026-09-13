@@ -479,3 +479,70 @@ button:disabled {
   color: #888;
   margin-top: 2px;
 }
+
+/* STEP11(20번) — Review 화면 Inspector 재설계: 중앙(판단/수정)은 넓게, 오른쪽(근거/부가정보)은
+   상시 패널로. 좁은 화면에서는 세로로 쌓인다(가로 스크롤을 강제하지 않음). */
+.review-layout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.review-grid-area {
+  flex: 1 1 480px;
+  min-width: 0;
+}
+
+.inspector-panel {
+  flex: 0 0 340px;
+  width: 340px;
+  max-height: 520px;
+  overflow-y: auto;
+  background: #f7f7f9;
+  border: 1px solid #e0e0e6;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.inspector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.inspector-section {
+  border-top: 1px solid #e0e0e6;
+  padding: 8px 0;
+  font-size: 12px;
+}
+
+.inspector-section summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.inspector-section-alert summary {
+  color: #b91c1c;
+}
+
+.inspector-photo-viewer img {
+  max-width: 100%;
+  border-radius: 6px;
+  border: 1px solid #e0e0e6;
+}
+
+.inspector-photo-link-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+}
+
+.inspector-photo-link-list li {
+  padding: 4px 0;
+  border-bottom: 1px dashed #e0e0e6;
+}

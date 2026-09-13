@@ -348,6 +348,18 @@ Recall=95%를 계산하지 않음)를 검증했다.
 `analysisRuns`에 `kind:"recompute"` 항목이 추가되며 `qualityEvents`에 `reanalyzed`가 남는 것을
 IndexedDB에 저장된 실제 데이터로 직접 확인했다.
 
+### Review 화면 Inspector 재설계
+
+예전엔 "사진 연결"/"출처"/"교차검증"/"상세" 4개 버튼이 각각 별도 모달을 열었다. 이제 중앙 표에서
+손상을 선택하면 오른쪽에 상시 Inspector 패널(`DamageInspector`, `DamageTable.tsx` 내부)이 뜨고,
+다른 행을 선택하면 그 자리에서 바로 갱신된다(모달을 닫았다 다시 열 필요 없음). 5개 접이식
+섹션(손상 사진[사진 여러 장이면 좌우 이동 가능]/사진 연결 정보/출처·근거/추가자료·교차검증[충돌
+있으면 자동 펼침]/변경 이력[기본 접힘])으로 정리했고, 각 섹션은 기존 함수(`linkPhoto`/
+`unlinkPhoto`/`resolveCrossValidationConflict` 등)를 그대로 재사용한다 — 로직을 새로 만들지
+않았다. "변경 이력"에는 STEP9의 `fieldOverrides`(AI 원본값 vs 사용자 최종값)와 STEP12-2의
+`qualityEvents`(사진 연결 변경 이력), STEP12-1의 Provider/Model/Prompt/Engine 정보를 함께 보여준다.
+STEP5 병합-불일치(`conflictModal`)는 이 스펙이 다루는 범위가 아니어서 기존 모달 그대로 뒀다.
+
 ## 알려진 제한 사항 (최소 구현으로 남겨둔 부분)
 
 - **모바일/좁은 화면 전용 레이아웃 없음**: STEP9 스펙 26번이 제안한 "손상목록→상세→사진→검수" 좁은

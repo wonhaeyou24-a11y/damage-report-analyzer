@@ -13,6 +13,7 @@ import { STATUS_LABEL } from "../types";
 import { manuallyLinkPhoto, manuallyUnlinkPhoto, setDamageNoPhoto, deriveDamagePhotoLinks } from "../lib/matchPhotos";
 import { resolveCrossValidationConflict } from "../lib/crossValidate";
 import { bulkConfirm, bulkMarkNoPhoto, compareByLocation, isManualEntry, isPhotoProblem, isPositionProblem, isScaleProblem, recordFieldEdit, searchDamages } from "../lib/finalReview";
+import type { AnalysisRunMeta, QualityEvent } from "../lib/quality/types";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -23,6 +24,10 @@ interface Props {
   onPhotosChange?: (photos: ExtractedPhoto[]) => void;
   reviewFilter?: ReviewFilter;
   onReviewFilterChange?: (filter: ReviewFilter) => void;
+  /** STEP11(업무기반) — Inspector "변경 이력"에서 "AI 최초 분석" 쪽에 Provider/Model/버전을 보여주기 위함. */
+  initialRun?: Pick<AnalysisRunMeta, "provider" | "model" | "promptVersion" | "engineVersion">;
+  /** STEP11(업무기반) — Inspector "변경 이력"에서 사진 연결 변경 이벤트를 보여주기 위함. */
+  qualityEvents?: QualityEvent[];
 }
 
 type ViewMode = "individual" | "group";
@@ -94,19 +99,32 @@ const EDITABLE_FIELD_BY_COLUMN: Record<string, EditableDamageField> = {
   status: "status",
 };
 
-export default function DamageTable({ records, onChange, photos = [], onPhotosChange, reviewFilter: controlledFilter, onReviewFilterChange }: Props) {
+export default function DamageTable({
+  records,
+  onChange,
+  photos = [],
+  onPhotosChange,
+  reviewFilter: controlledFilter,
+  onReviewFilterChange,
+  initialRun,
+  qualityEvents = [],
+}: Props) {
   const gridRef = useRef<AgGridReact<DamageRecord>>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("individual");
   const [internalFilter, setInternalFilter] = useState<ReviewFilter>("all");
   const reviewFilter = controlledFilter ?? internalFilter;
   const setReviewFilter = onReviewFilterChange ?? setInternalFilter;
   const [searchQuery, setSearchQuery] = useState("");
-  const [sourceModal, setSourceModal] = useState<DamageRecord | null>(null);
-  const [linkModal, setLinkModal] = useState<DamageRecord | null>(null);
   const [conflictModal, setConflictModal] = useState<DamageRecord | null>(null);
-  const [cvModal, setCvModal] = useState<DamageRecord | null>(null);
-  const [inspectorModal, setInspectorModal] = useState<DamageRecord | null>(null);
   const [cvManualValue, setCvManualValue] = useState<Record<string, string>>({});
+
+  // 스펙(20번, Inspector 재정의): 중앙 표에서 손상을 "선택"하면 오른쪽 Inspector가 그 손상의
+  // 사진/출처/교차검증/변경이력으로 즉시 갱신된다 — 예전처럼 여러 개의 개별 모달(사진 연결,
+  // 출처, 교차검증, 상세)을 각각 열고 닫는 대신, 하나의 상시 패널로 통합했다. id만 들고 있고
+  // 매 렌더마다 records/photos에서 최신값을 다시 찾는다(스냅샷을 따로 들고 있지 않음 — 재분석 등
+  // 다른 경로로 데이터가 바뀌어도 패널이 항상 최신 상태를 보여준다).
+  const [inspectedId, setInspectedId] = useState<string | null>(null);
+  const inspected = records.find((r) => r.id === inspectedId) ?? null;
 
   const rowData = useMemo(() => {
     let rows = records;
@@ -175,6 +193,7 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
 
   const deleteRecord = (id: string) => {
     onChange(records.filter((r) => r.id !== id));
+    if (inspectedId === id) setInspectedId(null);
   };
 
   const addBlankRecord = () => {
@@ -237,21 +256,11 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
         const linkedCount = r.photoIds?.length ?? 0;
         const icon = PHOTO_MATCH_ICON[r.photoMatchStatus ?? "noPhoto"];
         return (
-          <button className="link-btn" onClick={() => setLinkModal(r)}>
+          <button className="link-btn" onClick={() => setInspectedId(r.id)}>
             📷 {linkedCount > 0 ? `${linkedCount}장` : "0장"} {icon}
           </button>
         );
       },
-    },
-    {
-      headerName: "출처",
-      colId: "source",
-      width: 80,
-      cellRenderer: (p: any) => (
-        <button className="link-btn" onClick={() => setSourceModal(p.data)}>
-          🔎
-        </button>
-      ),
     },
     {
       headerName: "통합",
@@ -285,7 +294,7 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
         const r = p.data as DamageRecord;
         if (!r.crossValidation) return "-";
         return (
-          <button className="link-btn" onClick={() => setCvModal(r)}>
+          <button className="link-btn" onClick={() => setInspectedId(r.id)}>
             {CROSS_VALIDATION_ICON[r.crossValidation.result] ?? r.crossValidation.result}
           </button>
         );
@@ -305,7 +314,7 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
       colId: "inspector",
       width: 80,
       cellRenderer: (p: any) => (
-        <button className="link-btn" onClick={() => setInspectorModal(p.data)}>
+        <button className="link-btn" onClick={() => setInspectedId((p.data as DamageRecord).id)}>
           🔍 상세
         </button>
       ),
@@ -363,39 +372,32 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
     }));
     const updated = { ...record, photos: [...record.photos, ...newPhotos] };
     onChange(records.map((r) => (r.id === record.id ? updated : r)));
-    setLinkModal((m) => (m && m.id === record.id ? updated : m));
   };
 
   // STEP 7: 손상 ↔ 사진 수동 연결/해제. 사용자 결정은 자동 매칭보다 항상 우선한다.
+  // (기존 로직 그대로 — 예전엔 결과를 별도 모달 state에 다시 넣어줬지만, 이제 Inspector가
+  // records/photos props에서 직접 최신값을 읽으므로 그 스냅샷 갱신이 필요 없어졌다.)
   const linkPhoto = (damageId: string, photoId: string) => {
     if (!onPhotosChange) return;
     const nextPhotos = manuallyLinkPhoto(photos, photoId, damageId);
     onPhotosChange(nextPhotos);
-    const nextDamages = deriveDamagePhotoLinks(setDamageNoPhoto(records, damageId, false), nextPhotos);
-    onChange(nextDamages);
-    setLinkModal(nextDamages.find((d) => d.id === damageId) ?? null);
+    onChange(deriveDamagePhotoLinks(setDamageNoPhoto(records, damageId, false), nextPhotos));
   };
 
   const unlinkPhoto = (damageId: string, photoId: string) => {
     if (!onPhotosChange) return;
     const nextPhotos = manuallyUnlinkPhoto(photos, photoId, damageId);
     onPhotosChange(nextPhotos);
-    const nextDamages = deriveDamagePhotoLinks(records, nextPhotos);
-    onChange(nextDamages);
-    setLinkModal(nextDamages.find((d) => d.id === damageId) ?? null);
+    onChange(deriveDamagePhotoLinks(records, nextPhotos));
   };
 
   const markNoPhoto = (damageId: string, value: boolean) => {
-    const nextDamages = deriveDamagePhotoLinks(setDamageNoPhoto(records, damageId, value), photos);
-    onChange(nextDamages);
-    setLinkModal(nextDamages.find((d) => d.id === damageId) ?? null);
+    onChange(deriveDamagePhotoLinks(setDamageNoPhoto(records, damageId, value), photos));
   };
 
   // STEP 8: 불일치 해결 — 기본값 유지 / 추가자료 값 채택 / 직접 수정 모두 이 경로로 처리한다.
   const resolveConflict = (damageId: string, field: CrossValidationConflict["field"], value: string, reason?: string) => {
-    const nextDamages = resolveCrossValidationConflict(records, damageId, field, value, reason);
-    onChange(nextDamages);
-    setCvModal(nextDamages.find((d) => d.id === damageId) ?? null);
+    onChange(resolveCrossValidationConflict(records, damageId, field, value, reason));
   };
 
   // STEP 9: 일괄 검수
@@ -450,35 +452,38 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
         </div>
       </div>
 
-      <div style={{ height: 520, width: "100%" }}>
-        <AgGridReact<DamageRecord>
-          ref={gridRef}
-          theme={themeQuartz}
-          rowData={rowData}
-          columnDefs={columnDefs}
-          defaultColDef={{ resizable: true }}
-          rowSelection={{ mode: "multiRow" }}
-          onCellValueChanged={onCellValueChanged}
-        />
-      </div>
-
-      {sourceModal && (
-        <div className="modal-backdrop" onClick={() => setSourceModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>출처 정보 — {sourceModal.id}</h3>
-            <p>페이지: {sourceModal.sourcePages.join(", ") || "미상"}</p>
-            <ul>
-              {sourceModal.sourceReferences.map((ref, i) => (
-                <li key={i}>
-                  <strong>p.{ref.page}</strong> ({ref.type}){ref.excerpt ? ` — ${ref.excerpt}` : ""}
-                </li>
-              ))}
-              {sourceModal.sourceReferences.length === 0 && <li>등록된 출처 정보가 없습니다.</li>}
-            </ul>
-            <button onClick={() => setSourceModal(null)}>닫기</button>
-          </div>
+      {/* 스펙 20번 8절 — 중앙은 판단/수정 공간(넓게), 오른쪽은 근거/부가정보 확인 공간. */}
+      <div className="review-layout">
+        <div className="review-grid-area" style={{ height: 520 }}>
+          <AgGridReact<DamageRecord>
+            ref={gridRef}
+            theme={themeQuartz}
+            rowData={rowData}
+            columnDefs={columnDefs}
+            defaultColDef={{ resizable: true }}
+            rowSelection={{ mode: "multiRow" }}
+            onCellValueChanged={onCellValueChanged}
+          />
         </div>
-      )}
+
+        {inspected && (
+          <DamageInspector
+            key={inspected.id}
+            damage={inspected}
+            photos={photos}
+            onClose={() => setInspectedId(null)}
+            onLinkPhoto={linkPhoto}
+            onUnlinkPhoto={unlinkPhoto}
+            onMarkNoPhoto={markNoPhoto}
+            onPhotoFileChange={onPhotoFileChange}
+            onResolveConflict={resolveConflict}
+            cvManualValue={cvManualValue}
+            onCvManualValueChange={(field, value) => setCvManualValue((m) => ({ ...m, [field]: value }))}
+            initialRun={initialRun}
+            qualityEvents={qualityEvents}
+          />
+        )}
+      </div>
 
       {conflictModal && (
         <div className="modal-backdrop" onClick={() => setConflictModal(null)}>
@@ -503,266 +508,288 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {cvModal && cvModal.crossValidation && (
-        <div className="modal-backdrop" onClick={() => setCvModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>교차검증 상세 — {cvModal.id}</h3>
-            <p>
-              {cvModal.damageName} / {cvModal.part} / {cvModal.subPart} / {cvModal.location}
-            </p>
-            <p>
-              <strong>기본 보고서</strong>: p.{cvModal.sourcePages.join(", ") || "미상"}
-              {cvModal.sourceReferences[0]?.excerpt ? ` — "${cvModal.sourceReferences[0].excerpt}"` : ""}
-            </p>
+interface InspectorProps {
+  damage: DamageRecord;
+  photos: ExtractedPhoto[];
+  onClose: () => void;
+  onLinkPhoto: (damageId: string, photoId: string) => void;
+  onUnlinkPhoto: (damageId: string, photoId: string) => void;
+  onMarkNoPhoto: (damageId: string, value: boolean) => void;
+  onPhotoFileChange: (record: DamageRecord, files: FileList | null) => void;
+  onResolveConflict: (damageId: string, field: CrossValidationConflict["field"], value: string, reason?: string) => void;
+  cvManualValue: Record<string, string>;
+  onCvManualValueChange: (field: string, value: string) => void;
+  initialRun?: Pick<AnalysisRunMeta, "provider" | "model" | "promptVersion" | "engineVersion">;
+  qualityEvents: QualityEvent[];
+}
 
-            <h4>추가자료</h4>
-            <ul>
-              {cvModal.crossValidation.evidence.map((e, i) => (
-                <li key={i}>
-                  [{e.sourceType}] {e.fileName}
-                  {e.sourceRef.page ? ` p.${e.sourceRef.page}` : ""}
-                  {e.sourceRef.sheet ? ` (${e.sourceRef.sheet}${e.sourceRef.cell ? ` ${e.sourceRef.cell}` : ""})` : ""} → {e.result === "matched" ? "일치" : "불일치"}
+/**
+ * 스펙 20번 — 오른쪽 Inspector. 중앙 표가 이미 보여주는 손상명/부위/세부부위/위치/규모/보수방안
+ * 전체 편집 UI는 반복하지 않고, "이 손상의 사진은 무엇인가 / AI가 왜 연결했는가 / 출처는 어디인가 /
+ * 추가자료와 일치하는가 / 무엇이 바뀌었는가"에만 답한다. 예전에 사진연결/출처/교차검증/상세로
+ * 나뉘어 있던 4개의 개별 모달을 접이식 섹션 하나로 통합했다 — 기존 함수(linkPhoto/unlinkPhoto/
+ * resolveConflict 등)는 그대로 재사용한다.
+ */
+function DamageInspector({
+  damage: d,
+  photos,
+  onClose,
+  onLinkPhoto,
+  onUnlinkPhoto,
+  onMarkNoPhoto,
+  onPhotoFileChange,
+  onResolveConflict,
+  cvManualValue,
+  onCvManualValueChange,
+  initialRun,
+  qualityEvents,
+}: InspectorProps) {
+  // 부모가 이 컴포넌트를 key={damage.id}로 렌더링하므로, 손상이 바뀌면 컴포넌트가 통째로
+  // 다시 마운트되어 photoIndex가 자연히 0으로 리셋된다(별도 useEffect 리셋 불필요).
+  const [photoIndex, onPhotoIndexChange] = useState(0);
+  const linkedPhotos = photos.filter((p) => d.photoIds?.includes(p.id));
+  const candidatePhotos = photos
+    .filter((p) => !d.photoIds?.includes(p.id) && p.matchCandidates.some((c) => c.damageId === d.id))
+    .map((p) => ({ photo: p, candidate: p.matchCandidates.find((c) => c.damageId === d.id)! }))
+    .sort((a, b) => b.candidate.score - a.candidate.score);
+  const currentPhoto = linkedPhotos[Math.min(photoIndex, Math.max(linkedPhotos.length - 1, 0))] ?? null;
+  const hasConflict = (d.crossValidation?.conflicts.filter((c) => !c.resolved).length ?? 0) > 0;
+  const photoLinkEvents = qualityEvents.filter((e) => e.recordId === d.id && (e.type === "photo_linked" || e.type === "photo_unlinked"));
+
+  return (
+    <aside className="inspector-panel">
+      <div className="inspector-header">
+        <strong>
+          {d.groupNo !== "-" ? `${d.groupNo} ` : ""}
+          {d.damageName || "(손상명 미입력)"} · {d.subPart} · {d.location || "위치 미입력"}
+        </strong>
+        <button className="link-btn" onClick={onClose}>
+          닫기
+        </button>
+      </div>
+
+      <details open className="inspector-section">
+        <summary>손상 사진 {linkedPhotos.length > 0 ? `(${linkedPhotos.length})` : ""}</summary>
+        {currentPhoto ? (
+          <div className="inspector-photo-viewer">
+            {currentPhoto.image.dataUrl && <img src={currentPhoto.image.dataUrl} alt={currentPhoto.caption ?? currentPhoto.id} />}
+            <p className="hint">
+              {photoIndex + 1} / {linkedPhotos.length}
+            </p>
+            <div className="toolbar-group">
+              <button disabled={linkedPhotos.length < 2} onClick={() => onPhotoIndexChange((photoIndex - 1 + linkedPhotos.length) % linkedPhotos.length)}>
+                ◀ 이전
+              </button>
+              <button disabled={linkedPhotos.length < 2} onClick={() => onPhotoIndexChange((photoIndex + 1) % linkedPhotos.length)}>
+                다음 ▶
+              </button>
+            </div>
+            <p>
+              사진번호: {currentPhoto.photoNo ?? currentPhoto.id}
+              <br />
+              사진 ID: {currentPhoto.id}
+              <br />
+              페이지: {currentPhoto.page}
+              <br />
+              캡션: {currentPhoto.caption ?? "-"}
+              <br />
+              연결상태: {currentPhoto.matchStatus === "confirmed" ? "✓ 연결됨" : currentPhoto.matchStatus ?? "-"}
+            </p>
+          </div>
+        ) : (
+          <p className="hint">{d.photoMatchOverride === "noPhoto" ? "사진 없음으로 확인됨" : "연결된 사진이 없습니다."}</p>
+        )}
+      </details>
+
+      <details open className="inspector-section">
+        <summary>사진 연결 정보</summary>
+        {linkedPhotos.length > 0 && (
+          <ul className="inspector-photo-link-list">
+            {linkedPhotos.map((p) => {
+              const c = p.matchCandidates.find((c) => c.damageId === d.id);
+              return (
+                <li key={p.id}>
+                  <strong>{p.photoNo ?? p.id}</strong> · {p.matchSource === "manual" ? "사용자 수동 연결" : "AI 자동 연결"}
+                  {c && (
+                    <>
+                      {" "}
+                      · 신뢰도 {Math.round(c.score)} · 근거: {c.reasons.join(", ") || "-"}
+                    </>
+                  )}
+                  <button className="link-btn danger" onClick={() => onUnlinkPhoto(d.id, p.id)}>
+                    연결 해제
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {candidatePhotos.length > 0 && (
+          <>
+            <p className="hint">연결 후보 (자동 확정되지 않음 — 검토 필요)</p>
+            <ul className="inspector-photo-link-list">
+              {candidatePhotos.map(({ photo: p, candidate }) => (
+                <li key={p.id}>
+                  <strong>{p.photoNo ?? p.id}</strong> · 점수 {candidate.score} · {candidate.reasons.join(", ")}
+                  {candidate.conflict ? " ⚠ 정보 충돌" : ""}
+                  <button className="link-btn" onClick={() => onLinkPhoto(d.id, p.id)}>
+                    이 사진 연결
+                  </button>
                 </li>
               ))}
-              {cvModal.crossValidation.evidence.length === 0 && <li>참고할 수 있는 추가자료 근거가 없습니다.</li>}
             </ul>
-
-            {cvModal.crossValidation.conflicts.length > 0 && (
-              <>
-                <h4>⚠ 정보 불일치</h4>
-                <table className="photo-table">
-                  <thead>
-                    <tr>
-                      <th>항목</th>
-                      <th>기본 보고서</th>
-                      <th>추가자료</th>
-                      <th>처리</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cvModal.crossValidation.conflicts.map((c, i) => (
-                      <tr key={i}>
-                        <td>{c.field}</td>
-                        <td>
-                          {c.mainReport.value} {c.mainReport.page != null ? `(p.${c.mainReport.page})` : ""}
-                        </td>
-                        <td>
-                          [{c.additional.sourceType}] {c.additional.value} — {c.additional.fileName}
-                          {c.additional.page != null ? ` p.${c.additional.page}` : ""}
-                        </td>
-                        <td>
-                          {c.resolved ? (
-                            <span>✅ {c.resolved.value}로 확정 (수동)</span>
-                          ) : (
-                            <>
-                              <button onClick={() => resolveConflict(cvModal.id, c.field, c.mainReport.value, "기본값 유지")}>기본값 유지</button>{" "}
-                              <button onClick={() => resolveConflict(cvModal.id, c.field, c.additional.value, "추가자료 값 채택")}>
-                                추가자료 값 채택
-                              </button>{" "}
-                              <input
-                                className="search-box"
-                                placeholder="직접 입력"
-                                value={cvManualValue[c.field] ?? ""}
-                                onChange={(e) => setCvManualValue((m) => ({ ...m, [c.field]: e.target.value }))}
-                                style={{ width: 100 }}
-                              />
-                              <button
-                                onClick={() => {
-                                  const v = cvManualValue[c.field];
-                                  if (v) resolveConflict(cvModal.id, c.field, v, "직접 수정");
-                                }}
-                              >
-                                직접 입력 확정
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            <p>
-              교차검증 결과: {CROSS_VALIDATION_ICON[cvModal.crossValidation.result]} (신뢰도 {(cvModal.crossValidation.confidence * 100).toFixed(0)}%)
-            </p>
-            <button onClick={() => setCvModal(null)}>닫기</button>
-          </div>
+          </>
+        )}
+        {photoLinkEvents.length > 0 && (
+          <>
+            <p className="hint">연결 변경 이력</p>
+            <ul>
+              {photoLinkEvents.map((e) => (
+                <li key={e.id}>
+                  [{new Date(e.at).toLocaleString()}] {e.type === "photo_linked" ? `연결됨 (${e.to})` : `해제됨 (${e.from})`}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <label className="checkbox">
+          <input type="checkbox" checked={d.photoMatchOverride === "noPhoto"} onChange={(e) => onMarkNoPhoto(d.id, e.target.checked)} />이 손상은
+          사진 없음으로 표시
+        </label>
+        <div className="toolbar-group">
+          <label className="secondary-upload">
+            직접 업로드한 사진 추가 (STEP4, {d.photos.length}장)
+            <input type="file" multiple accept="image/*" onChange={(e) => onPhotoFileChange(d, e.target.files)} />
+          </label>
         </div>
-      )}
+      </details>
 
-      {linkModal &&
-        (() => {
-          const linkedPhotos = photos.filter((p) => linkModal.photoIds?.includes(p.id));
-          const candidatePhotos = photos
-            .filter((p) => !linkModal.photoIds?.includes(p.id) && p.matchCandidates.some((c) => c.damageId === linkModal.id))
-            .map((p) => ({ photo: p, candidate: p.matchCandidates.find((c) => c.damageId === linkModal.id)! }))
-            .sort((a, b) => b.candidate.score - a.candidate.score);
+      <details open className="inspector-section">
+        <summary>출처 / 근거</summary>
+        <p>원본 보고서 · p.{d.sourcePages.join(", ") || "미상"}</p>
+        <ul>
+          {d.sourceReferences.map((r, i) => (
+            <li key={i}>
+              p.{r.page} ({r.type}){r.excerpt ? ` — "${r.excerpt}"` : ""}
+            </li>
+          ))}
+          {d.sourceReferences.length === 0 && <li>등록된 출처 정보가 없습니다.</li>}
+        </ul>
+      </details>
 
-          return (
-            <div className="modal-backdrop" onClick={() => setLinkModal(null)}>
-              <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <h3>
-                  사진 연결 — {linkModal.id} ({linkModal.damageName} / {linkModal.subPart} / {linkModal.location})
-                </h3>
-
-                <h4>연결된 사진 ({linkedPhotos.length})</h4>
-                <div className="photo-grid">
-                  {linkedPhotos.map((p) => {
-                    const c = p.matchCandidates.find((c) => c.damageId === linkModal.id);
-                    return (
-                      <div key={p.id} className="photo-thumb">
-                        {p.image.dataUrl && <img src={p.image.dataUrl} alt={p.caption ?? p.id} />}
-                        <span>
-                          {p.photoNo ?? p.id} · p.{p.page}
-                        </span>
-                        {c && <span>점수 {c.score} — {c.reasons.join(", ") || "수동 연결"}</span>}
-                        <button className="link-btn danger" onClick={() => unlinkPhoto(linkModal.id, p.id)}>
-                          연결 해제
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {linkedPhotos.length === 0 && <p>연결된 사진이 없습니다.</p>}
-                </div>
-
-                {candidatePhotos.length > 0 && (
-                  <>
-                    <h4>연결 후보 (자동 확정되지 않음 — 검토 필요)</h4>
-                    <div className="photo-grid">
-                      {candidatePhotos.map(({ photo: p, candidate }) => (
-                        <div key={p.id} className="photo-thumb">
-                          {p.image.dataUrl && <img src={p.image.dataUrl} alt={p.caption ?? p.id} />}
-                          <span>
-                            {p.photoNo ?? p.id} · p.{p.page}
-                          </span>
-                          <span>
-                            점수 {candidate.score} — {candidate.reasons.join(", ")}
-                            {candidate.conflict ? " ⚠ 정보 충돌" : ""}
-                          </span>
-                          <button onClick={() => linkPhoto(linkModal.id, p.id)}>이 사진 연결</button>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                <p>
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={linkModal.photoMatchOverride === "noPhoto"}
-                      onChange={(e) => markNoPhoto(linkModal.id, e.target.checked)}
-                    />
-                    이 손상은 사진 없음으로 표시
-                  </label>
-                </p>
-
-                <h4>직접 업로드한 사진 (수동, STEP4)</h4>
-                <div className="photo-grid">
-                  {linkModal.photos.map((p) => (
-                    <div key={p.id} className="photo-thumb">
-                      {p.url && <img src={p.url} alt={p.caption ?? p.id} />}
-                      <span>{p.caption ?? p.id}</span>
-                    </div>
+      <details open={hasConflict} className={`inspector-section${hasConflict ? " inspector-section-alert" : ""}`}>
+        <summary>추가자료 / 교차검증{hasConflict ? " ⚠" : ""}</summary>
+        {d.crossValidation ? (
+          <>
+            <p>
+              상태: {CROSS_VALIDATION_ICON[d.crossValidation.result] ?? d.crossValidation.result} (신뢰도{" "}
+              {(d.crossValidation.confidence * 100).toFixed(0)}%)
+            </p>
+            <ul>
+              {d.crossValidation.evidence.map((e, i) => (
+                <li key={i}>
+                  [{e.sourceType}] {e.fileName}
+                  {e.sourceRef.page ? ` p.${e.sourceRef.page}` : ""} → {e.result === "matched" ? "일치" : "불일치"}
+                </li>
+              ))}
+              {d.crossValidation.evidence.length === 0 && <li>참고 근거 없음</li>}
+            </ul>
+            {d.crossValidation.conflicts.length > 0 && (
+              <table className="photo-table">
+                <thead>
+                  <tr>
+                    <th>항목</th>
+                    <th>본 보고서</th>
+                    <th>추가자료</th>
+                    <th>처리</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.crossValidation.conflicts.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.field}</td>
+                      <td>
+                        {c.mainReport.value} {c.mainReport.page != null ? `(p.${c.mainReport.page})` : ""}
+                      </td>
+                      <td>
+                        [{c.additional.sourceType}] {c.additional.value} — {c.additional.fileName}
+                      </td>
+                      <td>
+                        {c.resolved ? (
+                          <span>✅ {c.resolved.value}로 확정</span>
+                        ) : (
+                          <>
+                            <button onClick={() => onResolveConflict(d.id, c.field, c.mainReport.value, "기본값 유지")}>기본값 유지</button>{" "}
+                            <button onClick={() => onResolveConflict(d.id, c.field, c.additional.value, "추가자료 값 채택")}>추가자료 값 채택</button>
+                            <br />
+                            <input
+                              className="search-box"
+                              placeholder="직접 입력"
+                              value={cvManualValue[c.field] ?? ""}
+                              onChange={(e) => onCvManualValueChange(c.field, e.target.value)}
+                              style={{ width: 100 }}
+                            />
+                            <button
+                              onClick={() => {
+                                const v = cvManualValue[c.field];
+                                if (v) onResolveConflict(d.id, c.field, v, "직접 수정");
+                              }}
+                            >
+                              확정
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
                   ))}
-                  {linkModal.photos.length === 0 && <p>직접 업로드한 사진이 없습니다.</p>}
-                </div>
-                <input type="file" multiple accept="image/*" onChange={(e) => onPhotoFileChange(linkModal, e.target.files)} />
+                </tbody>
+              </table>
+            )}
+          </>
+        ) : (
+          <p className="hint">추가자료 없음</p>
+        )}
+      </details>
 
-                <button onClick={() => setLinkModal(null)}>닫기</button>
-              </div>
-            </div>
-          );
-        })()}
-
-      {inspectorModal &&
-        (() => {
-          const d = inspectorModal;
-          const linkedPhotos = photos.filter((p) => d.photoIds?.includes(p.id));
-          return (
-            <div className="modal-backdrop" onClick={() => setInspectorModal(null)}>
-              <div className="modal" onClick={(e) => e.stopPropagation()}>
-                <h3>손상 상세 Inspector — {d.id}</h3>
-
-                <h4>손상 기본정보</h4>
-                <p>
-                  {d.section} / {d.damageName} / {d.part} / {d.subPart} / {d.location} / {d.repairMethod} /{" "}
-                  {d.quantity ?? d.quantityGroup ?? "규모 정보 없음"}
-                </p>
-
-                <h4>AI 분석정보</h4>
-                <p>
-                  상태: {STATUS_LABEL[d.status]}
-                  {d.crossValidation ? ` · 교차검증 신뢰도 ${(d.crossValidation.confidence * 100).toFixed(0)}%` : ""}
-                </p>
-
-                <h4>사진 ({linkedPhotos.length})</h4>
-                <div className="photo-grid">
-                  {linkedPhotos.map((p) => (
-                    <div key={p.id} className="photo-thumb">
-                      {p.image.dataUrl && <img src={p.image.dataUrl} alt={p.caption ?? p.id} />}
-                      <span>
-                        {p.photoNo ?? p.id} · p.{p.page}
-                      </span>
-                    </div>
-                  ))}
-                  {linkedPhotos.length === 0 && <p>{d.photoMatchOverride === "noPhoto" ? "사진 없음(확인됨)" : "연결된 사진 없음"}</p>}
-                </div>
-
-                <h4>교차검증</h4>
-                {d.crossValidation ? (
-                  <ul>
-                    {d.crossValidation.evidence.map((e, i) => (
-                      <li key={i}>
-                        [{e.sourceType}] {e.fileName} → {e.result}
-                      </li>
-                    ))}
-                    {d.crossValidation.evidence.length === 0 && <li>참고 근거 없음</li>}
-                  </ul>
-                ) : (
-                  <p>교차검증 미실행 (추가자료 없음)</p>
-                )}
-
-                <h4>출처</h4>
-                <ul>
-                  {d.sourceReferences.map((r, i) => (
-                    <li key={i}>
-                      p.{r.page} ({r.type}){r.excerpt ? ` — "${r.excerpt}"` : ""}
-                    </li>
-                  ))}
-                </ul>
-
-                <h4>검수 기록</h4>
-                <ul>
-                  {(d.reviewHistory ?? []).map((h, i) => (
-                    <li key={i}>
-                      [{new Date(h.at).toLocaleString()}] {h.action}
-                      {h.field ? ` — ${h.field}: ${h.from} → ${h.to}` : ""} ({h.source})
-                    </li>
-                  ))}
-                  {(!d.reviewHistory || d.reviewHistory.length === 0) && <li>AI 추출 이후 수정 이력 없음</li>}
-                </ul>
-                {(d.fieldOverrides?.length ?? 0) > 0 && (
-                  <>
-                    <h4>사용자 수정값 (원본 보존)</h4>
-                    <ul>
-                      {d.fieldOverrides!.map((o, i) => (
-                        <li key={i}>
-                          {o.field}: 원본 "{o.originalValue}" → 현재 "{o.currentValue}"
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-
-                <button onClick={() => setInspectorModal(null)}>닫기</button>
-              </div>
-            </div>
-          );
-        })()}
-    </div>
+      <details className="inspector-section">
+        <summary>변경 이력</summary>
+        {initialRun && (
+          <p className="hint">
+            AI 최초 분석: {initialRun.provider} / {initialRun.model} / Prompt {initialRun.promptVersion} / Engine {initialRun.engineVersion}
+          </p>
+        )}
+        {(d.fieldOverrides?.length ?? 0) > 0 ? (
+          <ul>
+            {d.fieldOverrides!.map((o, i) => (
+              <li key={i}>
+                <strong>{o.field}</strong>
+                <br />
+                AI 분석: {o.originalValue}
+                <br />
+                사용자 수정: {o.currentValue}
+                <br />
+                변경시각: {new Date(o.changedAt).toLocaleString()} · 변경자: 사용자
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="hint">AI 분석 이후 사용자가 수정한 필드가 없습니다.</p>
+        )}
+        <p className="hint">검수 기록</p>
+        <ul>
+          {(d.reviewHistory ?? []).map((h, i) => (
+            <li key={i}>
+              [{new Date(h.at).toLocaleString()}] {h.action}
+              {h.field ? ` — ${h.field}: ${h.from} → ${h.to}` : ""} ({h.source})
+            </li>
+          ))}
+          {(!d.reviewHistory || d.reviewHistory.length === 0) && <li>AI 추출 이후 검수 기록 없음</li>}
+        </ul>
+      </details>
+    </aside>
   );
 }

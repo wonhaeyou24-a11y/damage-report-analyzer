@@ -333,6 +333,8 @@ export default function App() {
                     onPhotosChange={handlePhotosChange}
                     reviewFilter={reviewFilter}
                     onReviewFilterChange={setReviewFilter}
+                    initialRun={activeReport.analysisRuns.find((r) => r.kind === "initial")}
+                    qualityEvents={activeReport.qualityEvents}
                   />
                 ) : (
                   <p className="empty-state">추출된 손상 데이터가 없습니다.</p>
