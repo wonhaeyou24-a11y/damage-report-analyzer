@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { extractPdfText, formatPagesForPrompt } from "../lib/pdf";
-import { extractDamageGroupsWithClaude } from "../lib/claude";
+import { getActiveProvider, getAiProviderStatus } from "../lib/ai/providerManager";
 import { expandAllGroups } from "../lib/normalize";
 import { mergeDuplicates } from "../lib/mergeDuplicates";
 import { extractPhotosFromPdf } from "../lib/photoExtraction";
@@ -32,8 +32,9 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
       setStatus("PDF 파일을 먼저 선택하세요.");
       return;
     }
-    if (!apiKey) {
-      setStatus("Claude API 키를 입력하세요.");
+    const aiStatus = getAiProviderStatus();
+    if (!aiStatus.ready) {
+      setStatus(`AI 분석을 실행할 수 없습니다. ${aiStatus.reason ?? ""}`);
       return;
     }
     setBusy(true);
@@ -42,7 +43,7 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
       const pages = await extractPdfText(file);
       const text = formatPagesForPrompt(pages);
       setStatus("AI로 손상 그룹 분석 중... (문서 길이에 따라 시간이 걸릴 수 있습니다)");
-      const groups = await extractDamageGroupsWithClaude(apiKey, text);
+      const groups = await getActiveProvider().analyzeDocument(text);
       const rawRecords = expandAllGroups(groups);
       const records = mergeDuplicates(rawRecords);
       const mergedCount = records.filter((r) => r.mergeInfo?.merged).length;

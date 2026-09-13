@@ -6,6 +6,7 @@ import AdditionalDataPanel from "./components/AdditionalDataPanel";
 import FinalReviewBar from "./components/FinalReviewBar";
 import FinalOutputPanel from "./components/FinalOutputPanel";
 import ValidationApp from "./components/ValidationApp";
+import AISettingsPanel from "./components/AISettingsPanel";
 import type { AdditionalDocument, CandidateDamage, DamageRecord, ExportHistoryEntry, ExtractedPhoto, ReviewSession } from "./types";
 import { createReviewSession } from "./types";
 import "./App.css";
@@ -44,6 +45,7 @@ export default function App() {
         <ValidationApp />
       ) : (
         <>
+          <AISettingsPanel />
           <UploadPanel onResult={setRecords} onPhotosResult={setPhotos} />
 
           {records.length > 0 || photos.length > 0 ? (

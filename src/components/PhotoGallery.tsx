@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { DamageRecord, ExtractedPhoto } from "../types";
 import { PHOTO_STATUS_LABEL } from "../types";
-import { analyzePhotoWithVision } from "../lib/visionAnalysis";
 import { deriveDamagePhotoLinks, manuallyLinkPhoto, manuallyUnlinkPhoto } from "../lib/matchPhotos";
+import { getActiveProvider, getAiProviderStatus } from "../lib/ai/providerManager";
 
 interface Props {
   photos: ExtractedPhoto[];
@@ -10,8 +10,6 @@ interface Props {
   damages?: DamageRecord[];
   onDamagesChange?: (damages: DamageRecord[]) => void;
 }
-
-const API_KEY_STORAGE = "damage-analyzer-api-key";
 
 const RELATED_LABEL: Record<string, string> = {
   true: "손상사진",
@@ -32,7 +30,6 @@ export default function PhotoGallery({ photos, onChange, damages = [], onDamages
   const [onlyDamageRelated, setOnlyDamageRelated] = useState(false);
   const [linkFilter, setLinkFilter] = useState<PhotoLinkFilter>("all");
   const [visionBusy, setVisionBusy] = useState<string | null>(null);
-  const apiKey = localStorage.getItem(API_KEY_STORAGE) ?? "";
 
   let rows = onlyDamageRelated ? photos.filter((p) => p.damageRelated !== false) : photos;
   if (linkFilter !== "all") rows = rows.filter((p) => (p.matchStatus ?? "unmatched") === linkFilter);
@@ -43,13 +40,14 @@ export default function PhotoGallery({ photos, onChange, damages = [], onDamages
   };
 
   const runVision = async (photo: ExtractedPhoto) => {
-    if (!apiKey) {
-      alert("Claude API 키를 먼저 입력하세요.");
+    const aiStatus = getAiProviderStatus();
+    if (!aiStatus.ready) {
+      alert(`AI 분석을 실행할 수 없습니다. ${aiStatus.reason ?? ""}`);
       return;
     }
     setVisionBusy(photo.id);
     try {
-      const inference = await analyzePhotoWithVision(apiKey, photo.image.dataUrl, photo.nearbyText ?? photo.caption ?? "");
+      const inference = await getActiveProvider().analyzeImage(photo.image.dataUrl, photo.nearbyText ?? photo.caption ?? "");
       updatePhoto(photo.id, { visionInference: inference });
     } catch (err: any) {
       alert(`Vision 분석 실패: ${err.message ?? String(err)}`);

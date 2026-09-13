@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import type { AdditionalDocument, DamageRecord, ExtractedPhoto } from "../types";
 import { extractPdfText, formatPagesForPrompt } from "../lib/pdf";
-import { extractDamageGroupsWithClaude } from "../lib/claude";
+import { getActiveProvider, getAiProviderStatus } from "../lib/ai/providerManager";
+import { getActiveProviderId, getGeminiModel } from "../lib/ai/settings";
+import { MODEL as CLAUDE_MODEL } from "../lib/claude";
 import { expandAllGroups } from "../lib/normalize";
 import { mergeDuplicates } from "../lib/mergeDuplicates";
 import { extractPhotosFromPdf } from "../lib/photoExtraction";
@@ -17,11 +19,11 @@ import { buildValidationExcelBuffer, validationExcelFileName } from "../validati
 import { compareRuns } from "../validation/regression";
 import { buildValidationRun, runFullValidation } from "../validation/runValidation";
 import { createEmptyGroundTruth, DIFFICULTIES, FACILITY_TYPES } from "../validation/types";
-import type { Difficulty, ErrorEntry, FacilityType, GroundTruthDamage, TestCase, ValidationRun } from "../validation/types";
+import type { Difficulty, ErrorEntry, FacilityType, GroundTruthDamage, TestCase, TokenUsage, ValidationRun } from "../validation/types";
 import type { StandardPart } from "../types";
 import { STANDARD_PARTS } from "../types";
+import { getAiCallLog } from "../lib/ai/aiCallLog";
 
-const API_KEY_STORAGE = "damage-analyzer-api-key";
 const ENGINE_VERSION = "1.0.0";
 const PROMPT_VERSION = "v1";
 
@@ -51,7 +53,13 @@ export default function ValidationApp() {
   const [activeTestCaseId, setActiveTestCaseId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const apiKey = localStorage.getItem(API_KEY_STORAGE) ?? "";
+
+  // STEP 12-1: 검증 실행에 실제 사용 중인 Provider/Model을 기록한다(스펙 17번) — 더 이상
+  // "anthropic"/"claude-sonnet-5"로 하드코딩하지 않는다.
+  const currentProviderMeta = () => {
+    const providerId = getActiveProviderId();
+    return { provider: providerId, model: providerId === "gemini" ? getGeminiModel() : CLAUDE_MODEL };
+  };
 
   const latestRunPairs: RunPair[] = useMemo(
     () =>
@@ -100,15 +108,18 @@ export default function ValidationApp() {
   };
 
   // ---- 실제 STEP1~10 파이프라인을 그대로 호출하는 executor. 검증 로직이 분석 로직을 우회하지 않는다. ----
-  const executeAnalysis = async (testCase: TestCase): Promise<{ aiDamages: DamageRecord[]; aiPhotos: ExtractedPhoto[]; processingTimeMs: number }> => {
+  const executeAnalysis = async (
+    testCase: TestCase
+  ): Promise<{ aiDamages: DamageRecord[]; aiPhotos: ExtractedPhoto[]; processingTimeMs: number; tokenUsage: TokenUsage }> => {
     const stored = files[testCase.id];
     if (!stored) throw new Error("원본 보고서 파일이 없습니다.");
-    if (!apiKey) throw new Error("Claude API 키가 필요합니다.");
+    const aiStatus = getAiProviderStatus();
+    if (!aiStatus.ready) throw new Error(aiStatus.reason ?? "AI Provider가 연결되지 않았습니다.");
 
     const start = Date.now();
     const pages = await extractPdfText(stored.report);
     const text = formatPagesForPrompt(pages);
-    const groups = await extractDamageGroupsWithClaude(apiKey, text);
+    const groups = await getActiveProvider().analyzeDocument(text);
     const rawRecords = expandAllGroups(groups);
     const merged = mergeDuplicates(rawRecords);
     const photos = await extractPhotosFromPdf(stored.report);
@@ -120,7 +131,19 @@ export default function ValidationApp() {
       finalDamages = runCrossValidation(finalDamages, documents).damages;
     }
 
-    return { aiDamages: finalDamages, aiPhotos: matched.photos, processingTimeMs: Date.now() - start };
+    // 이번 실행 동안 기록된 AI 호출 로그에서 실제 토큰 사용량만 집계한다(제공되지 않으면 null 유지, 임의 계산 안 함).
+    const calls = getAiCallLog().filter((c) => c.startedAt >= start && c.operation === "damageExtraction");
+    const hasUsage = calls.some((c) => c.tokenUsage);
+    const tokenUsage: TokenUsage = hasUsage
+      ? {
+          inputTokens: calls.reduce((sum, c) => sum + (c.tokenUsage?.inputTokens ?? 0), 0),
+          outputTokens: calls.reduce((sum, c) => sum + (c.tokenUsage?.outputTokens ?? 0), 0),
+          totalTokens: calls.reduce((sum, c) => sum + (c.tokenUsage?.totalTokens ?? 0), 0),
+          estimatedCost: "미제공",
+        }
+      : { inputTokens: null, outputTokens: null, totalTokens: null, estimatedCost: "미제공" };
+
+    return { aiDamages: finalDamages, aiPhotos: matched.photos, processingTimeMs: Date.now() - start, tokenUsage };
   };
 
   const runSingle = async (id: string) => {
@@ -135,10 +158,10 @@ export default function ValidationApp() {
         aiDamages: result.aiDamages,
         aiPhotos: result.aiPhotos,
         processingTimeMs: result.processingTimeMs,
+        tokenUsage: result.tokenUsage,
         engineVersion: ENGINE_VERSION,
         promptVersion: PROMPT_VERSION,
-        provider: "anthropic",
-        model: "claude-sonnet-5",
+        ...currentProviderMeta(),
       });
       setRunsByTestCase((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), run] }));
       updateTestCase(id, { runs: [...tc.runs, run.id], status: "completed" });
@@ -154,11 +177,11 @@ export default function ValidationApp() {
   const runAll = async () => {
     setBusy(true);
     setStatus(`전체 검증 실행 중... (${testCases.length}건)`);
-    const outcomes = await runFullValidation(
-      testCases,
-      (tc) => executeAnalysis(tc),
-      { engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION, provider: "anthropic", model: "claude-sonnet-5" }
-    );
+    const outcomes = await runFullValidation(testCases, (tc) => executeAnalysis(tc), {
+      engineVersion: ENGINE_VERSION,
+      promptVersion: PROMPT_VERSION,
+      ...currentProviderMeta(),
+    });
     setRunsByTestCase((prev) => {
       const next = { ...prev };
       for (const o of outcomes) {

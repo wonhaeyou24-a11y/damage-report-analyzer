@@ -1,7 +1,7 @@
 import type { RawDamageGroup } from "../types";
 import { buildExtractionPrompt } from "./aiPrompt";
 
-const MODEL = "claude-sonnet-5";
+export const MODEL = "claude-sonnet-5";
 
 /**
  * 브라우저에서 직접 Claude API(Messages)를 호출하여 보고서 텍스트로부터

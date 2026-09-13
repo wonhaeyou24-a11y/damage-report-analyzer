@@ -266,6 +266,39 @@ PDF 업로드 (src/lib/pdf.ts, pdfjs-dist)
 업로드하고 Ground Truth를 작성한 뒤 [분석 실행]/[전체 검증 실행]으로 실측 정확도를 산출할 수 있습니다.
 가짜 보고서를 만들어 검증을 통과시키지 않았습니다.
 
+## STEP 12-1 — Gemini API Key + AI Provider 기본 연결 (src/lib/ai/, server/geminiCore.ts, api/gemini.ts)
+
+STEP 11 실제 보고서 검증을 실제로 수행할 수 있도록 Gemini를 두 번째 AI Provider로 연결했다.
+기존 STEP1~10 파이프라인/데이터 구조(damageRecords, photoRecords, additionalData,
+crossValidation, manualOverride 등)는 전혀 변경하지 않았다 — AI 호출부(`extractDamageGroupsWithClaude`/
+`analyzePhotoWithVision` 직접 호출) 3곳(UploadPanel/PhotoGallery/ValidationApp)만
+`getActiveProvider()`(Provider 추상화)로 교체했다.
+
+**구조**: 이 프로젝트는 순수 프론트엔드(SPA)였고 백엔드가 없었다. Gemini API Key를 브라우저에
+노출하지 않기 위해(스펙 7번) 최소한의 백엔드를 추가했다 — Vercel Serverless Function
+(`api/gemini.ts`)과 로컬 개발용 Vite 미들웨어(`vite.config.ts`)가 동일한 relay 로직
+(`server/geminiCore.ts`, 중복 없음)을 공유한다. 브라우저는 Gemini API를 절대 직접 호출하지 않고
+항상 `/api/gemini`(우리 서버)만 호출한다 — 실제 프로덕션 빌드(`dist/`)를 스캔해
+`generativelanguage.googleapis.com` 문자열이 없음을 확인했다.
+
+**AI Provider 추상화**(`src/lib/ai/`): `AIProvider` 인터페이스(`analyzeDocument`/`analyzeImage`/
+`testConnection`) 하나로 `ClaudeProvider`(기존 claude.ts/visionAnalysis.ts를 그대로 감싸는 어댑터,
+로직 변경 없음)와 `GeminiProvider`(백엔드 relay 호출, 동일한 프롬프트 빌더 `aiPrompt.ts` 재사용)를
+동일하게 다룬다. `AI 설정` 화면(`AISettingsPanel.tsx`)에서 Provider 선택, Gemini API Key 입력
+(마스킹, sessionStorage — 영구 저장 아님), Model 선택(Gemini `models.list` API로 실제 지원 모델을
+조회, 실패 시에만 최소 후보 목록 사용), 실제 API 호출 기반 연결 테스트를 제공한다.
+
+**보안**: Gemini API Key는 코드에 하드코딩하지 않았고, 개발환경에서는 `GEMINI_API_KEY` 환경변수를
+서버 측 fallback으로 지원한다(`.env.example` 참고, `.gitignore`에 `.env*` 추가). API Key는 로그/에러
+메시지 어디에도 기록하지 않는다. AI 호출 실패 시에도 기존 damageRecords/photoRecords 등은 그대로
+보존된다(Provider 호출은 항상 기존 try/catch 경계 안에서 실행됨, 실패해도 이전 상태를 덮어쓰지 않음).
+
+**미실시**: 이 개발 세션에는 실제 Gemini API Key가 없어, 실제 API 호출 성공 케이스(TEST4)는
+검증하지 못했다. 대신 (1) 실제 네트워크 호출 경로 자체는 실행하되 인증이 실패하는 케이스(잘못된
+키 형식, TEST2/3)를 실제로 재현해 오류 처리를 확인했고, (2) 서버 relay 로직은 8개 단위 테스트
+(`server/geminiCore.test.ts`)로 모든 분기를 검증했다. 실제 Gemini API Key를 발급받으면 AI 설정
+화면에서 바로 연결 테스트/실제 분석을 실행할 수 있다.
+
 ## 알려진 제한 사항 (최소 구현으로 남겨둔 부분)
 
 - **모바일/좁은 화면 전용 레이아웃 없음**: STEP9 스펙 26번이 제안한 "손상목록→상세→사진→검수" 좁은

@@ -1,4 +1,5 @@
 import type { VisionInference } from "../types";
+import { buildVisionPrompt } from "./aiPrompt";
 
 const MODEL = "claude-sonnet-5";
 
@@ -16,10 +17,7 @@ export async function analyzePhotoWithVision(
   const [, mediaType, base64] = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/) ?? [];
   if (!base64) throw new Error("이미지 데이터 URL 형식이 올바르지 않습니다.");
 
-  const prompt = `이 이미지는 시설물 점검 보고서에서 추출한 사진입니다. 주변 문맥: "${contextText}".
-이 사진이 실제 손상사진인지, 어떤 종류의 손상(damageType)과 어떤 시설 부위(facility)로 보이는지 추정하라.
-반드시 다음 JSON 형식으로만 답하라. 확신이 없으면 confidence를 낮게 잡아라.
-{"damageType": "추정 손상 유형 또는 null", "facility": "추정 시설 부위 또는 null", "confidence": 0.0}`;
+  const prompt = buildVisionPrompt(contextText);
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
