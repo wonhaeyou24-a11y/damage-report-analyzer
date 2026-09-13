@@ -75,68 +75,16 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
   };
 
   return (
-    <div className="final-output-panel">
+    <div className="final-output-panel final-output-panel-compact">
       <h2>최종 결과</h2>
-      {/* 검수 진행 상태/전체 건수는 위쪽 "최종 검토/검수"에 이미 표시된다 — 여기서는 그걸
-          반복하지 않고, 실제 출력 대상(제외된 항목 제외)만 한 줄로 보여준다. */}
+      {/* 검수 진행 상태/전체 건수는 옆의 "최종 검토/검수"에 이미 표시된다 — 여기서는 반복하지 않고
+          실제 출력 대상(제외된 항목 제외)만 한 줄로 보여준다. 사용자 요청: 여기는 출력 버튼 위주로,
+          세부 옵션/이력은 접어서 필요할 때만 펼친다. */}
       <p className="final-output-counts">
-        {session.finalReviewStatus === "finalized" ? "✓ 최종 검수 완료" : session.finalReviewStatus === "completed" ? "검수 완료 (최종 확정 전)" : "검수 진행중"}
-        {" · 출력 대상: "}
-        손상 {finalizedDamages.length}건 · 사진 {finalizedPhotos.length}건 · 교차검증 {finalizedDamages.filter((d) => !!d.crossValidation).length}건
+        손상 {finalizedDamages.length}건 · 사진 {finalizedPhotos.length}건
       </p>
 
       {locked && <p className="hint">최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)</p>}
-
-      <div className="final-output-options">
-        <label className="checkbox">
-          <input type="checkbox" checked={options.includeDamageList} onChange={(e) => setOptions({ ...options, includeDamageList: e.target.checked })} />
-          손상목록
-        </label>
-        <label className="checkbox">
-          <input type="checkbox" checked={options.includePhotos} onChange={(e) => setOptions({ ...options, includePhotos: e.target.checked })} />
-          손상사진
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={options.includeCrossValidation}
-            onChange={(e) => setOptions({ ...options, includeCrossValidation: e.target.checked })}
-          />
-          교차검증 결과
-        </label>
-        <label className="checkbox">
-          <input type="checkbox" checked={options.includeSources} onChange={(e) => setOptions({ ...options, includeSources: e.target.checked })} />
-          출처정보
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={options.includeReviewHistory}
-            onChange={(e) => setOptions({ ...options, includeReviewHistory: e.target.checked })}
-          />
-          검수이력
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={options.includeUnlinkedPhotos}
-            onChange={(e) => setOptions({ ...options, includeUnlinkedPhotos: e.target.checked })}
-          />
-          미연결 사진 포함
-        </label>
-      </div>
-
-      <div className="final-output-scope">
-        <label>
-          선택 손상만 출력 (No를 콤마/공백으로 구분, 비우면 전체)
-          <input
-            className="search-box"
-            placeholder="예: ③-01, ③-02, ④-01"
-            value={selectedIdsText}
-            onChange={(e) => setSelectedIdsText(e.target.value)}
-          />
-        </label>
-      </div>
 
       {blockedReasons && (
         <div className="final-review-check-fail">
@@ -155,35 +103,86 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
           {lastResult.excel === "success" ? " ✅" : lastResult.excel === "failed" ? " ⚠" : ""}
         </button>
         <button onClick={() => run("word")} disabled={locked || busy === "word"}>
-          {busy === "word" ? "생성 중..." : "Word 보고서 생성"}
+          {busy === "word" ? "생성 중..." : "Word 보고서"}
           {lastResult.word === "success" ? " ✅" : lastResult.word === "failed" ? " ⚠" : ""}
         </button>
         <button onClick={() => run("pdf")} disabled={locked || busy === "pdf"}>
-          {busy === "pdf" ? "생성 중..." : "PDF 생성"}
+          {busy === "pdf" ? "생성 중..." : "PDF"}
           {lastResult.pdf === "success" ? " ✅" : lastResult.pdf === "failed" ? " ⚠" : ""}
         </button>
       </div>
 
-      <button className="secondary" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
-        최종 데이터 다시 보기
-      </button>
+      <details className="final-output-options-details">
+        <summary className="hint">출력 옵션 / 이력</summary>
 
-      {history.length > 0 && (
-        <>
-          <h4>출력 이력</h4>
-          <ul className="export-history-list">
-            {[...history]
-              .reverse()
-              .slice(0, 10)
-              .map((h) => (
-                <li key={h.id}>
-                  [{FORMAT_LABEL[h.type]}] {h.fileName} — {new Date(h.createdAt).toLocaleString()} · v{h.reviewVersion} ·{" "}
-                  {h.status === "success" ? "성공" : `실패 (${h.error ?? "-"})`}
-                </li>
-              ))}
-          </ul>
-        </>
-      )}
+        <div className="final-output-options">
+          <label className="checkbox">
+            <input type="checkbox" checked={options.includeDamageList} onChange={(e) => setOptions({ ...options, includeDamageList: e.target.checked })} />
+            손상목록
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={options.includePhotos} onChange={(e) => setOptions({ ...options, includePhotos: e.target.checked })} />
+            손상사진
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={options.includeCrossValidation}
+              onChange={(e) => setOptions({ ...options, includeCrossValidation: e.target.checked })}
+            />
+            교차검증 결과
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={options.includeSources} onChange={(e) => setOptions({ ...options, includeSources: e.target.checked })} />
+            출처정보
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={options.includeReviewHistory}
+              onChange={(e) => setOptions({ ...options, includeReviewHistory: e.target.checked })}
+            />
+            검수이력
+          </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={options.includeUnlinkedPhotos}
+              onChange={(e) => setOptions({ ...options, includeUnlinkedPhotos: e.target.checked })}
+            />
+            미연결 사진 포함
+          </label>
+        </div>
+
+        <div className="final-output-scope">
+          <label>
+            선택 손상만 출력 (No를 콤마/공백으로 구분, 비우면 전체)
+            <input
+              className="search-box"
+              placeholder="예: ③-01, ③-02, ④-01"
+              value={selectedIdsText}
+              onChange={(e) => setSelectedIdsText(e.target.value)}
+            />
+          </label>
+        </div>
+
+        {history.length > 0 && (
+          <>
+            <h4>출력 이력</h4>
+            <ul className="export-history-list">
+              {[...history]
+                .reverse()
+                .slice(0, 10)
+                .map((h) => (
+                  <li key={h.id}>
+                    [{FORMAT_LABEL[h.type]}] {h.fileName} — {new Date(h.createdAt).toLocaleString()} · v{h.reviewVersion} ·{" "}
+                    {h.status === "success" ? "성공" : `실패 (${h.error ?? "-"})`}
+                  </li>
+                ))}
+            </ul>
+          </>
+        )}
+      </details>
     </div>
   );
 }

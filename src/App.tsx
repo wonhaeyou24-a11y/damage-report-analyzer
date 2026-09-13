@@ -208,9 +208,14 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
-        <h1>보고서 손상분석 프로그램</h1>
-        <p className="subtitle">손상 그룹을 개별 위치별 레코드로 분리하고, 부위/세부부위/위치를 구조화하여 검토합니다.</p>
+      <header className="app-header">
+        <div>
+          <h1>보고서 손상분석 프로그램</h1>
+          <p className="subtitle">손상 그룹을 개별 위치별 레코드로 분리하고, 부위/세부부위/위치를 구조화하여 검토합니다.</p>
+        </div>
+        {/* 사용자 요청: AI 설정을 우측 상단 빈 공간에 배치. Gemini/Claude 선택은 "정확도/범용성
+            검증"에서도 쓰이므로 모드와 무관하게 항상 보이는 위치가 맞다. */}
+        <AISettingsPanel />
       </header>
 
       <div className="tab-bar">
@@ -236,7 +241,6 @@ export default function App() {
       </div>
       <div hidden={mode !== "analysis"}>
         <>
-          <AISettingsPanel />
           <UploadPanel onAnalysisComplete={handleAnalysisComplete} />
 
           {storageNote && <p className="status-line">{storageNote}</p>}
@@ -292,20 +296,31 @@ export default function App() {
 
           {activeReport ? (
             <>
-              <FinalReviewBar
-                session={activeReport.session}
-                onSessionChange={handleSessionChange}
-                records={activeReport.records}
-                onRecordsChange={handleReanalyzeRecordsChange}
-                photos={activeReport.photos}
-                onPhotosChange={handlePhotosChange}
-                documents={activeReport.documents}
-                candidateDamages={activeReport.candidateDamages}
-                onFilterSelect={(f) => {
-                  setReviewFilter(f);
-                  setTab(f === "photoReview" ? "photos" : "damages");
-                }}
-              />
+              {/* 사용자 요청: "최종 결과"(출력 버튼)를 "최종 검토/검수" 옆에 나란히 배치. */}
+              <div className="top-panels-row">
+                <FinalReviewBar
+                  session={activeReport.session}
+                  onSessionChange={handleSessionChange}
+                  records={activeReport.records}
+                  onRecordsChange={handleReanalyzeRecordsChange}
+                  photos={activeReport.photos}
+                  onPhotosChange={handlePhotosChange}
+                  documents={activeReport.documents}
+                  candidateDamages={activeReport.candidateDamages}
+                  onFilterSelect={(f) => {
+                    setReviewFilter(f);
+                    setTab(f === "photoReview" ? "photos" : "damages");
+                  }}
+                />
+                <FinalOutputPanel
+                  session={activeReport.session}
+                  records={activeReport.records}
+                  photos={activeReport.photos}
+                  candidateDamages={activeReport.candidateDamages}
+                  history={activeReport.exportHistory}
+                  onHistoryChange={(exportHistory) => updateActiveReport({ exportHistory })}
+                />
+              </div>
 
               <AdditionalDataPanel
                 damages={activeReport.records}
@@ -342,15 +357,6 @@ export default function App() {
               ) : (
                 <PhotoGallery photos={activeReport.photos} onChange={handlePhotosChange} damages={activeReport.records} onDamagesChange={handleRecordsChange} />
               )}
-
-              <FinalOutputPanel
-                session={activeReport.session}
-                records={activeReport.records}
-                photos={activeReport.photos}
-                candidateDamages={activeReport.candidateDamages}
-                history={activeReport.exportHistory}
-                onHistoryChange={(exportHistory) => updateActiveReport({ exportHistory })}
-              />
             </>
           ) : (
             <p className="empty-state">

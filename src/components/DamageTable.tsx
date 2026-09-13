@@ -463,6 +463,14 @@ export default function DamageTable({
             defaultColDef={{ resizable: true }}
             rowSelection={{ mode: "multiRow" }}
             onCellValueChanged={onCellValueChanged}
+            onRowClicked={(e) => e.data && setInspectedId(e.data.id)}
+            rowClassRules={{
+              "row-status-confirmed": (p) => p.data?.status === "confirmed",
+              "row-status-review": (p) => p.data?.status === "review",
+              "row-status-conflict": (p) => p.data?.status === "conflict",
+              "row-status-excluded": (p) => p.data?.status === "excluded",
+              "row-inspected": (p) => p.data?.id === inspectedId,
+            }}
           />
         </div>
 

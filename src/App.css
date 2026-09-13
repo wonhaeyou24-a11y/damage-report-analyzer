@@ -6,6 +6,28 @@
   color: #1a1a1a;
 }
 
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.app-header .ai-settings-panel {
+  margin: 0;
+  max-width: 380px;
+  padding: 10px 14px;
+}
+
+.app-header .ai-settings-panel h3 {
+  font-size: 13px;
+}
+
+.app-header .ai-settings-panel .upload-row {
+  gap: 8px;
+}
+
 header h1 {
   margin: 0 0 4px;
   font-size: 22px;
@@ -275,6 +297,15 @@ button:disabled {
   border-bottom: 1px solid #eee;
 }
 
+.candidate-damage-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.additional-data-panel-compact {
+  padding: 10px 16px;
+}
+
 .final-review-bar {
   background: #10203a;
   color: white;
@@ -361,6 +392,32 @@ button:disabled {
 .final-review-check-fail ul {
   margin: 6px 0 0;
   padding-left: 18px;
+}
+
+.top-panels-row {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.top-panels-row .final-review-bar {
+  flex: 1 1 480px;
+  margin-bottom: 0;
+}
+
+.top-panels-row .final-output-panel-compact {
+  flex: 0 0 280px;
+  margin-top: 0;
+}
+
+.final-output-options-details {
+  margin-top: 10px;
+}
+
+.final-output-options-details summary {
+  cursor: pointer;
 }
 
 .final-output-panel {
@@ -545,4 +602,22 @@ button:disabled {
 .inspector-photo-link-list li {
   padding: 4px 0;
   border-bottom: 1px dashed #e0e0e6;
+}
+
+/* 손상 상태를 행 색으로 직관적으로 표현(사용자 요청) — AG Grid 기본 배경 위에 덧씌운다. */
+.ag-row.row-status-review {
+  background-color: #fff8e1 !important;
+}
+.ag-row.row-status-confirmed {
+  background-color: #e8f5e9 !important;
+}
+.ag-row.row-status-conflict {
+  background-color: #fdecea !important;
+}
+.ag-row.row-status-excluded {
+  background-color: #f0f0f0 !important;
+  color: #999;
+}
+.ag-row.row-inspected {
+  box-shadow: inset 3px 0 0 #5b5bf5;
 }

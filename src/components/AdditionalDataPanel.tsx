@@ -86,18 +86,19 @@ export default function AdditionalDataPanel({
     onCandidateDamagesChange(deferCandidateDamage(candidateDamages, candidateId));
   };
 
-  return (
-    <div className="additional-data-panel">
-      <h2>STEP 8. 추가자료 교차검증</h2>
-      <p className="subtitle">
-        주 보고서에서 추출된 손상정보를 외관조사망도, 사진대지, 보수·보강표, 수량표, 도면 등의 추가자료와 비교하여 검증합니다.
-      </p>
+  const pendingDecisionCount = candidateDamages.filter((c) => !c.decision).length;
 
-      <label className="checkbox">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-        추가자료를 이용한 교차검증
-      </label>
-      <p className="hint">추가자료가 없는 경우 이 단계를 건너뛸 수 있습니다.</p>
+  return (
+    <div className="additional-data-panel additional-data-panel-compact">
+      <div className="final-review-header">
+        <h2>STEP 8. 추가자료 교차검증</h2>
+        <label className="checkbox">
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+          사용
+        </label>
+      </div>
+
+      {!enabled && <p className="hint">추가자료 없이 건너뜁니다 — 나머지 분석 결과는 그대로 유지됩니다.</p>}
 
       {enabled && (
         <div className="additional-data-body">
@@ -109,6 +110,11 @@ export default function AdditionalDataPanel({
             <button onClick={attachAndParse} disabled={busy || pendingFiles.length === 0}>
               {busy ? "분석 중..." : `첨부 파일 분석 (${pendingFiles.length})`}
             </button>
+            {documents.length > 0 && (
+              <button onClick={startCrossValidation} disabled={busy}>
+                교차검증 시작
+              </button>
+            )}
           </div>
 
           {pendingFiles.length > 0 && (
@@ -125,8 +131,8 @@ export default function AdditionalDataPanel({
           )}
 
           {documents.length > 0 && (
-            <>
-              <h4>첨부된 파일</h4>
+            <details>
+              <summary className="hint">첨부된 파일 {documents.length}건</summary>
               <ul className="attached-doc-list">
                 {documents.map((d) => (
                   <li key={d.id}>
@@ -137,17 +143,14 @@ export default function AdditionalDataPanel({
                   </li>
                 ))}
               </ul>
-              <button onClick={startCrossValidation} disabled={busy}>
-                교차검증 시작
-              </button>
-            </>
+            </details>
           )}
 
           {status && <p className="status-line">{status}</p>}
 
           {hasRun && candidateDamages.length > 0 && (
-            <div id="candidate-section">
-              <h4>🟡 누락 가능성 — 추가자료에서 발견되었으나 기본 손상목록에서 확인되지 않음</h4>
+            <details id="candidate-section" open={pendingDecisionCount > 0}>
+              <summary>🟡 누락 가능성 후보 {pendingDecisionCount}건 (결정 필요)</summary>
               <ul className="candidate-damage-list">
                 {candidateDamages
                   .filter((c) => !c.decision)
@@ -166,7 +169,7 @@ export default function AdditionalDataPanel({
                       </button>
                     </li>
                   ))}
-                {candidateDamages.every((c) => c.decision) && <li>모든 후보에 대한 결정이 완료되었습니다.</li>}
+                {pendingDecisionCount === 0 && <li>모든 후보에 대한 결정이 완료되었습니다.</li>}
               </ul>
               {candidateDamages.some((c) => c.decision) && (
                 <p className="hint">
@@ -174,12 +177,10 @@ export default function AdditionalDataPanel({
                   {candidateDamages.filter((c) => c.decision === "deferred").length}건
                 </p>
               )}
-            </div>
+            </details>
           )}
         </div>
       )}
-
-      {!enabled && <p className="hint">[STEP 8 건너뛰기] — 추가자료 없이도 나머지 분석 결과는 정상적으로 유지됩니다.</p>}
     </div>
   );
 }
