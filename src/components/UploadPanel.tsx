@@ -10,13 +10,16 @@ import { SAMPLE_GROUPS } from "../lib/sampleData";
 import { SAMPLE_PHOTOS } from "../lib/photoSampleData";
 
 interface Props {
-  onResult: (records: DamageRecord[]) => void;
-  onPhotosResult: (photos: ExtractedPhoto[]) => void;
+  /** 분석(또는 샘플 로드)이 완전히 끝난 시점에 딱 한 번 호출된다 — records/photos를 따로따로
+   * 받으면 호출 시점이 달라 "지금 이게 새 보고서 분석 결과인지" 판단하기 애매해지므로(분석한
+   * 보고서 목록에 새 항목으로 추가할지 판단해야 하는 App.tsx 입장에서), 결과가 모두 준비된
+   * 뒤 하나로 합쳐 전달한다. */
+  onAnalysisComplete: (records: DamageRecord[], photos: ExtractedPhoto[], sourceName: string) => void;
 }
 
 const API_KEY_STORAGE = "damage-analyzer-api-key";
 
-export default function UploadPanel({ onResult, onPhotosResult }: Props) {
+export default function UploadPanel({ onAnalysisComplete }: Props) {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) ?? "");
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string>("");
@@ -65,6 +68,7 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
 
       let photoStatusNote = "사진 추출 실패 (손상 데이터는 정상 반영됨)";
       let finalRecords = records;
+      let finalPhotos: ExtractedPhoto[] = [];
       try {
         setStatus("PDF에서 사진 후보 추출 중... (0/?페이지, 임베디드 이미지 탐색 + OCR)");
         const photos = await extractPhotosFromPdf(file, (page, total) =>
@@ -73,7 +77,7 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
         setStatus("손상-사진 자동 매칭 중...");
         const matched = matchPhotosToDamages(records, photos);
         finalRecords = matched.damages;
-        onPhotosResult(matched.photos);
+        finalPhotos = matched.photos;
         const confirmedPhotoCount = matched.photos.filter((p) => p.matchStatus === "confirmed").length;
         photoStatusNote = `사진 후보 ${photos.length}건 추출 → 자동 연결 ${confirmedPhotoCount}건`;
       } catch (photoErr: any) {
@@ -81,7 +85,7 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
         photoStatusNote = `사진 추출 실패: ${photoErr.message ?? String(photoErr)}`;
       }
 
-      onResult(finalRecords);
+      onAnalysisComplete(finalRecords, finalPhotos, file.name);
       setStatus(
         `완료: 손상 그룹 ${groups.length}개 → 개별 손상 ${rawRecords.length}건 → 통합 후 ${records.length}건 (중복통합 ${mergedCount}건, 정보불일치 ${conflictCount}건) / ${photoStatusNote}`
       );
@@ -96,8 +100,7 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
     const rawRecords = expandAllGroups(SAMPLE_GROUPS);
     const records = mergeDuplicates(rawRecords);
     const matched = matchPhotosToDamages(records, SAMPLE_PHOTOS);
-    onResult(matched.damages);
-    onPhotosResult(matched.photos);
+    onAnalysisComplete(matched.damages, matched.photos, "샘플 데이터");
     const confirmedPhotoCount = matched.photos.filter((p) => p.matchStatus === "confirmed").length;
     setStatus(
       `샘플 데이터 로드: 그룹 ${SAMPLE_GROUPS.length}개 → 개별 손상 ${rawRecords.length}건 → 통합 후 ${records.length}건 / 샘플 사진 ${SAMPLE_PHOTOS.length}건 → 자동 연결 ${confirmedPhotoCount}건`
