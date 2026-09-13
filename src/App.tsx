@@ -7,13 +7,17 @@ import FinalReviewBar from "./components/FinalReviewBar";
 import FinalOutputPanel from "./components/FinalOutputPanel";
 import ValidationApp from "./components/ValidationApp";
 import AISettingsPanel from "./components/AISettingsPanel";
-import type { DamageRecord, ExtractedPhoto } from "./types";
+import QualityDashboard from "./components/QualityDashboard";
+import type { DamageRecord, ExtractedPhoto, ReviewSession } from "./types";
 import { createReviewSession } from "./types";
 import { clearAllReports, deleteReport, loadAllReports, saveReport, type AnalyzedReport } from "./lib/reportStorage";
+import { ENGINE_VERSION, PROMPT_VERSION, getCurrentProviderModel } from "./lib/ai/providerManager";
+import { buildReanalyzedEvent, diffPhotosForQualityEvents, diffRecordsForQualityEvents, diffSessionForQualityEvents } from "./lib/quality/diffEvents";
+import type { AnalysisRunMeta } from "./lib/quality/types";
 import "./App.css";
 
 type Tab = "damages" | "photos";
-type Mode = "analysis" | "validation";
+type Mode = "analysis" | "validation" | "quality";
 
 // 분석 1건의 전체 작업 상태 스냅샷(AnalyzedReport)은 IndexedDB 저장 스키마이기도 해서
 // src/lib/reportStorage.ts에 정의돼 있다 — App은 그 타입을 그대로 가져다 쓴다.
@@ -23,20 +27,39 @@ function nextReportId(): string {
   reportIdCounter += 1;
   return `R${String(reportIdCounter).padStart(3, "0")}`;
 }
+let runIdCounter = 0;
+function nextRunId(): string {
+  runIdCounter += 1;
+  return `AR-${Date.now()}-${runIdCounter}`;
+}
 
 function createAnalyzedReport(records: DamageRecord[], photos: ExtractedPhoto[], sourceName: string): AnalyzedReport {
   const session = createReviewSession();
   session.reportName = sourceName.replace(/\.pdf$/i, "");
+  const { provider, model } = getCurrentProviderModel();
+  const createdAt = new Date().toISOString();
+  const initialRun: AnalysisRunMeta = {
+    id: nextRunId(),
+    kind: "initial",
+    provider,
+    model,
+    promptVersion: PROMPT_VERSION,
+    engineVersion: ENGINE_VERSION,
+    runAt: createdAt,
+    recordCount: records.length,
+  };
   return {
     id: nextReportId(),
     sourceName,
-    createdAt: new Date().toISOString(),
+    createdAt,
     records,
     photos,
     documents: [],
     candidateDamages: [],
     session,
     exportHistory: [],
+    analysisRuns: [initialRun],
+    qualityEvents: [],
   };
 }
 
@@ -90,6 +113,73 @@ export default function App() {
     setReports((prev) => prev.map((r) => (r.id === activeReportId ? { ...r, ...patch } : r)));
   };
 
+  // ---- STEP11(업무기반 품질추적): 손상/사진/세션이 바뀔 때마다 이전 상태와 비교해 이벤트를
+  // 남긴다. DamageTable/PhotoGallery/FinalReviewBar 등 기존 컴포넌트는 손대지 않고, 이 경계
+  // 한 곳에서만 diff를 계산한다. setReports의 functional updater 안에서 "직전 저장된 값"(r)을
+  // 기준으로 비교해야, 같은 렌더에서 records/photos가 연달아 바뀌어도(예: 재분석) 이벤트가
+  // 서로를 덮어쓰지 않는다.
+  const handleRecordsChange = (records: DamageRecord[]) => {
+    if (!activeReportId) return;
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id !== activeReportId) return r;
+        const events = diffRecordsForQualityEvents(r.id, r.records, records);
+        return events.length ? { ...r, records, qualityEvents: [...r.qualityEvents, ...events] } : { ...r, records };
+      })
+    );
+  };
+
+  const handlePhotosChange = (photos: ExtractedPhoto[]) => {
+    if (!activeReportId) return;
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id !== activeReportId) return r;
+        const events = diffPhotosForQualityEvents(r.id, r.photos, photos);
+        return events.length ? { ...r, photos, qualityEvents: [...r.qualityEvents, ...events] } : { ...r, photos };
+      })
+    );
+  };
+
+  const handleSessionChange = (session: ReviewSession) => {
+    if (!activeReportId) return;
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id !== activeReportId) return r;
+        const events = diffSessionForQualityEvents(r.id, r.session, session);
+        return events.length ? { ...r, session, qualityEvents: [...r.qualityEvents, ...events] } : { ...r, session };
+      })
+    );
+  };
+
+  // FinalReviewBar의 "재분석"(STEP7/8 재계산, AI 재호출 아님) 전용 — 일반 필드 편집과 구분해
+  // "reanalyzed" 이벤트와 새 analysisRun(kind:"recompute")을 남긴다(스펙 26/27번).
+  const handleReanalyzeRecordsChange = (records: DamageRecord[]) => {
+    if (!activeReportId) return;
+    const { provider, model } = getCurrentProviderModel();
+    setReports((prev) =>
+      prev.map((r) => {
+        if (r.id !== activeReportId) return r;
+        const diffEvents = diffRecordsForQualityEvents(r.id, r.records, records);
+        const run: AnalysisRunMeta = {
+          id: nextRunId(),
+          kind: "recompute",
+          provider,
+          model,
+          promptVersion: PROMPT_VERSION,
+          engineVersion: ENGINE_VERSION,
+          runAt: new Date().toISOString(),
+          recordCount: records.length,
+        };
+        return {
+          ...r,
+          records,
+          qualityEvents: [...r.qualityEvents, ...diffEvents, buildReanalyzedEvent(r.id)],
+          analysisRuns: [...r.analysisRuns, run],
+        };
+      })
+    );
+  };
+
   const openReport = (id: string) => {
     setActiveReportId(id);
     setReviewFilter("all");
@@ -130,13 +220,19 @@ export default function App() {
         <button className={mode === "validation" ? "active" : ""} onClick={() => setMode("validation")}>
           정확도 / 범용성 검증
         </button>
+        <button className={mode === "quality" ? "active" : ""} onClick={() => setMode("quality")}>
+          품질
+        </button>
       </div>
 
-      {/* 두 화면 모두 항상 마운트해 두고 hidden으로만 전환한다 — 조건부 렌더링으로 언마운트하면
+      {/* 세 화면 모두 항상 마운트해 두고 hidden으로만 전환한다 — 조건부 렌더링으로 언마운트하면
           ValidationApp의 테스트 목록/Ground Truth/검증 결과 같은 화면 내부 상태가 탭을 바꿀 때마다
           사라진다(사용자가 실제로 겪은 문제: "분석/검증 후 창을 바꾸면 사라진다"). */}
       <div hidden={mode !== "validation"}>
         <ValidationApp />
+      </div>
+      <div hidden={mode !== "quality"}>
+        <QualityDashboard reports={reports} />
       </div>
       <div hidden={mode !== "analysis"}>
         <>
@@ -198,11 +294,11 @@ export default function App() {
             <>
               <FinalReviewBar
                 session={activeReport.session}
-                onSessionChange={(session) => updateActiveReport({ session })}
+                onSessionChange={handleSessionChange}
                 records={activeReport.records}
-                onRecordsChange={(records) => updateActiveReport({ records })}
+                onRecordsChange={handleReanalyzeRecordsChange}
                 photos={activeReport.photos}
-                onPhotosChange={(photos) => updateActiveReport({ photos })}
+                onPhotosChange={handlePhotosChange}
                 documents={activeReport.documents}
                 candidateDamages={activeReport.candidateDamages}
                 onFilterSelect={(f) => {
@@ -213,7 +309,7 @@ export default function App() {
 
               <AdditionalDataPanel
                 damages={activeReport.records}
-                onDamagesChange={(records) => updateActiveReport({ records })}
+                onDamagesChange={handleRecordsChange}
                 documents={activeReport.documents}
                 onDocumentsChange={(documents) => updateActiveReport({ documents })}
                 candidateDamages={activeReport.candidateDamages}
@@ -232,9 +328,9 @@ export default function App() {
                 activeReport.records.length > 0 ? (
                   <DamageTable
                     records={activeReport.records}
-                    onChange={(records) => updateActiveReport({ records })}
+                    onChange={handleRecordsChange}
                     photos={activeReport.photos}
-                    onPhotosChange={(photos) => updateActiveReport({ photos })}
+                    onPhotosChange={handlePhotosChange}
                     reviewFilter={reviewFilter}
                     onReviewFilterChange={setReviewFilter}
                   />
@@ -242,12 +338,7 @@ export default function App() {
                   <p className="empty-state">추출된 손상 데이터가 없습니다.</p>
                 )
               ) : (
-                <PhotoGallery
-                  photos={activeReport.photos}
-                  onChange={(photos) => updateActiveReport({ photos })}
-                  damages={activeReport.records}
-                  onDamagesChange={(records) => updateActiveReport({ records })}
-                />
+                <PhotoGallery photos={activeReport.photos} onChange={handlePhotosChange} damages={activeReport.records} onDamagesChange={handleRecordsChange} />
               )}
 
               <FinalOutputPanel

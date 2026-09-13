@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { clearAllReports, deleteReport, loadAllReports, saveReport, type AnalyzedReport } from "./reportStorage";
+import { clearAllReports, deleteReport, loadAllReports, migrateReport, saveReport, type AnalyzedReport } from "./reportStorage";
 import { createReviewSession } from "../types";
 
 function report(overrides: Partial<AnalyzedReport>): AnalyzedReport {
@@ -14,6 +14,8 @@ function report(overrides: Partial<AnalyzedReport>): AnalyzedReport {
     candidateDamages: [],
     session: createReviewSession(),
     exportHistory: [],
+    analysisRuns: [],
+    qualityEvents: [],
     ...overrides,
   };
 }
@@ -32,7 +34,8 @@ describe("reportStorage (IndexedDB persistence)", () => {
     await saveReport(r);
     const loaded = await loadAllReports();
     expect(loaded).toHaveLength(1);
-    expect(loaded[0]).toEqual(r);
+    // analysisRuns/qualityEvents가 있으므로 migrateReport는 이 데이터를 legacy로 취급하지 않는다.
+    expect(loaded[0]).toEqual({ ...r, legacy: false });
   });
 
   it("put overwrites the same id instead of duplicating it", async () => {
@@ -63,5 +66,20 @@ describe("reportStorage (IndexedDB persistence)", () => {
     await saveReport(report({ id: "R002" }));
     await clearAllReports();
     expect(await loadAllReports()).toEqual([]);
+  });
+});
+
+describe("migrateReport — TEST 14 (기존 Legacy 데이터, 스펙 25번)", () => {
+  it("STEP11(품질추적) 이전에 저장된 보고서는 analysisRuns/qualityEvents가 채워지고 legacy:true로 표시된다", () => {
+    const old = { id: "R-OLD", sourceName: "old.pdf", createdAt: "2026-01-01T00:00:00.000Z", records: [], photos: [], documents: [], candidateDamages: [], session: createReviewSession(), exportHistory: [] };
+    const migrated = migrateReport(old);
+    expect(migrated.analysisRuns).toEqual([]);
+    expect(migrated.qualityEvents).toEqual([]);
+    expect(migrated.legacy).toBe(true);
+  });
+
+  it("이미 analysisRuns/qualityEvents가 있는 보고서는 legacy로 과거 데이터를 함부로 판정하지 않는다", () => {
+    const modern: AnalyzedReport = report({ analysisRuns: [], qualityEvents: [] });
+    expect(migrateReport(modern).legacy).toBe(false);
   });
 });

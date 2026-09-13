@@ -221,6 +221,11 @@ PDF 업로드 (src/lib/pdf.ts, pdfjs-dist)
 
 ## STEP 11 — 정확도/범용성 검증 시스템 (src/validation/, src/components/ValidationApp.tsx)
 
+> **참고**: 이 절이 설명하는 Ground Truth 기반 검증 시스템은 삭제하지 않고 그대로 유지하지만,
+> Production 기본 검증 방식으로는 더 이상 쓰지 않는다. 실제 업무 데이터를 기반으로 하는
+> "STEP 11(업무기반 품질추적)"이 아래(STEP 12-2)에 별도로 추가됐다 — 필요하면 이 GT 기반
+> 시스템을 특정 버전의 정확한 성능을 재는 별도 Benchmark 도구로 계속 쓸 수 있다.
+
 - **운영/테스트 데이터 완전 분리**: `src/validation/`을 별도 네임스페이스로 두고, `../types.ts`의
   `DamageRecord`/`ExtractedPhoto`는 읽기 전용으로만 참조한다. Ground Truth는 AI 결과와 독립적으로
   사람이 직접 입력하며, AI 출력을 정답으로 쓰지 않는다.
@@ -299,6 +304,50 @@ crossValidation, manualOverride 등)는 전혀 변경하지 않았다 — AI 호
 (`server/geminiCore.test.ts`)로 모든 분기를 검증했다. 실제 Gemini API Key를 발급받으면 AI 설정
 화면에서 바로 연결 테스트/실제 분석을 실행할 수 있다.
 
+## STEP 12-2 — 업무 데이터 기반 자동 품질검증 및 분석 추적 (src/lib/quality/, src/lib/reportStorage.ts, src/components/QualityDashboard.tsx)
+
+별도 테스트 보고서나 사람이 매번 새로 만드는 Ground Truth 없이, **실제 사용자가 STEP1~10 화면에서
+분석 결과를 검토·수정·확정하는 과정 자체**를 품질 데이터로 자동 축적한다. 사용자는 평소처럼
+업로드→분석→검토→수정→확정→출력만 하면 되고, 품질 추적은 그 뒤에서 조용히 기록된다.
+
+**기존 구조 재사용**: STEP9의 `FieldOverride`(originalValue/currentValue/manualOverride/changedAt)와
+`ReviewHistoryEntry`가 이미 "AI 최초값 vs 사용자 최종값"을 구분해 저장하고 있었다 — 새 필드를
+추가하지 않고 그대로 읽어서 품질 지표를 계산한다. STEP12-1의 Provider/Model 추적, STEP8의
+`CrossValidationConflict.resolved`도 그대로 재사용했다.
+
+**이벤트 추적 방식**: `DamageTable`/`PhotoGallery`/`FinalReviewBar` 등 기존 컴포넌트는 한 줄도
+고치지 않았다. 대신 `App.tsx`가 이미 모든 변경을 받는 경계(`onRecordsChange`/`onPhotosChange`/
+`onSessionChange`)에서 "이전 상태 vs 다음 상태"를 비교해(`src/lib/quality/diffEvents.ts`) 필드
+수정/손상 추가·삭제/사진 연결·해제(N:M 지원)/교차검증 해결/검수완료/최종확정/재분석 이벤트를
+report별 `qualityEvents` 배열에 append한다(지우거나 덮어쓰지 않음). 재분석(STEP7/8 재계산)은
+일반 필드 편집과 구분해 `reanalyzed` 이벤트 + 새 `analysisRuns` 항목(kind:"recompute")을
+남기고, 실제 AI를 재호출한 최초 분석은 `kind:"initial"`로 기록해 재분석해도 이전 이력이 사라지지
+않는다.
+
+**정직한 계산 원칙**(`src/lib/quality/metrics.ts`): 미검토 손상은 "AI가 맞았다"는 근거로 쓰지
+않는다. 사용자 수정 여부만으로 Precision/Recall을 계산하지 않고 "검토 후 유지율/수정률"이라고만
+부른다. 표본이 `MIN_SAMPLE_SIZE`(5건) 미만이면 값 대신 "데이터 부족"을 표시한다("검토 데이터
+N건" 항상 병기). 사용자 수정은 사유를 명시하지 않는 한 자동으로 "AI 오류"로 확정하지 않고
+`UNKNOWN`으로 남긴다(스펙 18번).
+
+**Migration Adapter**(`reportStorage.ts`의 `migrateReport()`): 이 기능 이전에 IndexedDB에 저장된
+보고서는 `analysisRuns`/`qualityEvents`가 없는데, 이를 빈 배열로 채우고 `legacy:true`로 표시한다
+— "AI 결과가 정확했다"고 소급 판정하지 않는다. 손상 레코드 자체(fieldOverrides/status)는 legacy
+여부와 무관하게 그대로 있으므로, 필드별 유지율 계산에는 legacy 보고서도 포함된다(버전별
+breakdown에서만 제외 — provider/model을 알 수 없으므로).
+
+**테스트**: 31개 단위 테스트(`diffEvents.test.ts`, `metrics.test.ts`, `reportStorage.test.ts`의
+`migrateReport` 케이스 포함, 전체 스위트 203개 전부 통과)로 사용자 수정 없음/수정/손상 추가·삭제/
+사진 연결·변경·N:M/교차검증 해결/재검토/재분석/버전별 breakdown/데이터 부족 상태/anti-fabrication
+케이스(검토 100건 중 유지 90·수정 10 → "유지율 90%"이지 "Recall"이 아님, 사용자 추가 5건만으로
+Recall=95%를 계산하지 않음)를 검증했다.
+
+**실제 브라우저로 확인한 것**: 샘플 데이터 분석 → 손상 1건의 위치를 165m→168m로 실제 편집 →
+품질 Dashboard가 즉시 "사용자 수정 1건", "위치" 필드는 표본 1건이라 "데이터 부족"으로 정확히
+표시, 오류 후보에 `LOCATION_ERROR 1건` 반영 → "재분석" 실행 → `fieldOverrides`(168m)가 보존되고
+`analysisRuns`에 `kind:"recompute"` 항목이 추가되며 `qualityEvents`에 `reanalyzed`가 남는 것을
+IndexedDB에 저장된 실제 데이터로 직접 확인했다.
+
 ## 알려진 제한 사항 (최소 구현으로 남겨둔 부분)
 
 - **모바일/좁은 화면 전용 레이아웃 없음**: STEP9 스펙 26번이 제안한 "손상목록→상세→사진→검수" 좁은
@@ -319,3 +368,12 @@ crossValidation, manualOverride 등)는 전혀 변경하지 않았다 — AI 호
   못했습니다(테스트 환경에 파일 업로드 자동화 도구가 없음). 실제 보고서로 최초 사용 시 결과를 확인해
   주세요. 스캔본처럼 페이지 전체가 하나의 이미지인 경우 그대로 크롭되어 "페이지 전체를 덮는 이미지" 메모와
   함께 검토 상태로 남습니다.
+- **"검토 시작(REVIEWING)" 상태는 추적하지 않음**: 사용자가 손상 행을 그냥 눈으로만 보고 아무 행동도
+  하지 않은 경우를 감지할 신뢰할 만한 신호가 현재 UI(스프레드시트형 검토 화면)에는 없다. 실제로
+  일어난 행동(필드 수정/상태 변경/일괄 검수 등)만 "검토됨"으로 집계하며, "본 것 자체"를 지어내지 않는다.
+- **수정 사유 입력 UI 미구현**: `QualityEvent.reason` 필드와 `classifyChange()`의 분류 로직은
+  이미 구현돼 있지만(스펙 19번, 선택 입력), 화면에서 사유를 고를 수 있는 UI(드롭다운 등)는 아직
+  없다. 지금은 모든 수정이 `classification:"UNKNOWN"`으로 기록된다 — 이는 스펙 18번이 요구하는
+  "사유 없이는 AI 오류로 확정하지 않는다"는 원칙과 일치하는 안전한 기본값이다.
+- **저장 공간 상한 없음**: 분석한 보고서가 계속 쌓여도 자동으로 정리되지 않는다(스펙 39번이 "1차
+  범위에는 넣지 않는 게 낫다"고 명시한 부분). "전체 삭제" 버튼으로 수동 정리만 가능하다.

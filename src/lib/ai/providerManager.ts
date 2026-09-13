@@ -1,3 +1,4 @@
+import { MODEL as CLAUDE_MODEL } from "../claude";
 import { createClaudeProvider } from "./claudeProvider";
 import { createGeminiProvider } from "./geminiProvider";
 import { getActiveProviderId, getClaudeApiKey, getGeminiApiKey, getGeminiModel } from "./settings";
@@ -7,6 +8,18 @@ export interface AiProviderStatus {
   providerId: ProviderId;
   ready: boolean;
   reason?: string;
+}
+
+/** 이 코드가 만드는 추출 로직/프롬프트의 버전 — STEP11(구) 검증과 STEP11(신) 업무기반 품질추적이
+ * 같은 값을 쓰도록 한곳에 둔다. 프롬프트나 파이프라인 로직을 의미있게 바꿀 때 사람이 올린다
+ * (자동으로 바뀌지 않는다 — 스펙 14/16번). */
+export const ENGINE_VERSION = "1.0.0";
+export const PROMPT_VERSION = "v1";
+
+/** 현재 활성 Provider/Model을 한 곳에서 얻는다(ValidationApp/App이 각자 중복 구현하지 않도록). */
+export function getCurrentProviderModel(): { provider: ProviderId; model: string } {
+  const providerId = getActiveProviderId();
+  return { provider: providerId, model: providerId === "gemini" ? getGeminiModel() : CLAUDE_MODEL };
 }
 
 /**

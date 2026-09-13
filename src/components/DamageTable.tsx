@@ -43,7 +43,9 @@ export type ReviewFilter =
   | "positionProblem"
   | "photoProblem"
   | "scaleProblem"
-  | "manualEntry";
+  | "manualEntry"
+  | "modified"
+  | "unmodified";
 
 const STATUS_OPTIONS: DamageStatus[] = ["confirmed", "review", "conflict", "excluded"];
 
@@ -78,6 +80,8 @@ export const REVIEW_FILTER_OPTIONS: { value: ReviewFilter; label: string }[] = [
   { value: "photoProblem", label: "사진 문제" },
   { value: "scaleProblem", label: "규모 문제" },
   { value: "manualEntry", label: "직접입력 손상" },
+  { value: "modified", label: "변경됨" },
+  { value: "unmodified", label: "변경 없음" },
 ];
 
 const EDITABLE_FIELD_BY_COLUMN: Record<string, EditableDamageField> = {
@@ -148,6 +152,13 @@ export default function DamageTable({ records, onChange, photos = [], onPhotosCh
         break;
       case "manualEntry":
         rows = rows.filter(isManualEntry);
+        break;
+      case "modified":
+        // STEP11(업무기반): fieldOverrides가 있으면 AI 원본값에서 사용자가 실제로 고친 것이다.
+        rows = rows.filter((r) => (r.fieldOverrides?.length ?? 0) > 0);
+        break;
+      case "unmodified":
+        rows = rows.filter((r) => (r.fieldOverrides?.length ?? 0) === 0);
         break;
     }
     if (searchQuery.trim()) rows = searchDamages(rows, photos, searchQuery);

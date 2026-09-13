@@ -131,6 +131,7 @@ export interface ValidationMetrics {
 
 export type ErrorCategory =
   | "EXTRACTION_ERROR"
+  | "SECTION_ERROR"
   | "LOCATION_ERROR"
   | "DAMAGE_NAME_ERROR"
   | "PART_CLASSIFICATION_ERROR"
@@ -145,6 +146,7 @@ export type ErrorCategory =
   | "DUPLICATE_ERROR"
   | "CONFLICT_DETECTION_ERROR"
   | "SOURCE_REFERENCE_ERROR"
+  | "MISSING_DAMAGE" // STEP11(업무기반): 사용자가 AI가 놓친 손상을 직접 추가한 경우의 후보 분류
   | "OTHER";
 
 export interface ErrorEntry {

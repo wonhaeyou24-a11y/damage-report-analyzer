@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AdditionalDocument, DamageRecord, ExtractedPhoto } from "../types";
 import { extractPdfText, formatPagesForPrompt } from "../lib/pdf";
-import { getActiveProvider, getAiProviderStatus } from "../lib/ai/providerManager";
-import { getActiveProviderId, getGeminiModel } from "../lib/ai/settings";
-import { MODEL as CLAUDE_MODEL } from "../lib/claude";
+import { ENGINE_VERSION, PROMPT_VERSION, getActiveProvider, getAiProviderStatus, getCurrentProviderModel } from "../lib/ai/providerManager";
 import { expandAllGroups } from "../lib/normalize";
 import { mergeDuplicates } from "../lib/mergeDuplicates";
 import { extractPhotosFromPdf } from "../lib/photoExtraction";
@@ -23,9 +21,6 @@ import type { Difficulty, ErrorEntry, FacilityType, GroundTruthDamage, TestCase,
 import type { StandardPart } from "../types";
 import { STANDARD_PARTS } from "../types";
 import { getAiCallLog } from "../lib/ai/aiCallLog";
-
-const ENGINE_VERSION = "1.0.0";
-const PROMPT_VERSION = "v1";
 
 type View = "list" | "groundTruth" | "dashboard" | "errors";
 
@@ -53,13 +48,6 @@ export default function ValidationApp() {
   const [activeTestCaseId, setActiveTestCaseId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
-
-  // STEP 12-1: 검증 실행에 실제 사용 중인 Provider/Model을 기록한다(스펙 17번) — 더 이상
-  // "anthropic"/"claude-sonnet-5"로 하드코딩하지 않는다.
-  const currentProviderMeta = () => {
-    const providerId = getActiveProviderId();
-    return { provider: providerId, model: providerId === "gemini" ? getGeminiModel() : CLAUDE_MODEL };
-  };
 
   const latestRunPairs: RunPair[] = useMemo(
     () =>
@@ -178,7 +166,7 @@ export default function ValidationApp() {
         tokenUsage: result.tokenUsage,
         engineVersion: ENGINE_VERSION,
         promptVersion: PROMPT_VERSION,
-        ...currentProviderMeta(),
+        ...getCurrentProviderModel(),
       });
       setRunsByTestCase((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), run] }));
       updateTestCase(id, { runs: [...tc.runs, run.id], status: "completed" });
@@ -197,7 +185,7 @@ export default function ValidationApp() {
     const outcomes = await runFullValidation(
       testCases,
       (tc) => executeAnalysis(tc),
-      { engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION, ...currentProviderMeta() },
+      { engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION, ...getCurrentProviderModel() },
       undefined,
       (done, total, testCaseId) => setStatus(`전체 검증 실행 중... (${done}/${total}건, 방금 완료: ${testCaseId})`)
     );
