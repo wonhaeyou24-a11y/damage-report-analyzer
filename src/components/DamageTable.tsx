@@ -69,6 +69,13 @@ const CROSS_VALIDATION_ICON: Record<string, string> = {
   unsupported: "⚪ 검증 불가",
 };
 
+const FIELD_LABEL_KO: Record<string, string> = {
+  damageName: "손상명",
+  subPart: "세부부위",
+  quantity: "규모/물량",
+  repairMethod: "보수방안",
+};
+
 export const REVIEW_FILTER_OPTIONS: { value: ReviewFilter; label: string }[] = [
   { value: "all", label: "전체" },
   { value: "confirmed", label: "확정" },
@@ -706,6 +713,20 @@ function DamageInspector({
               ))}
               {d.crossValidation.evidence.length === 0 && <li>참고 근거 없음</li>}
             </ul>
+            {(d.crossValidation.enrichments?.length ?? 0) > 0 && (
+              <>
+                <p className="hint">추가자료로 보완된 필드 — 원래 비어 있던 값만 채워지며, 값이 있던 필드는 자동으로 바뀌지 않습니다.</p>
+                <ul>
+                  {d.crossValidation.enrichments!.map((e, i) => (
+                    <li key={i}>
+                      <strong>{FIELD_LABEL_KO[e.field] ?? e.field}</strong>: 미입력 → {e.value} (출처: [{e.sourceType}] {e.fileName}
+                      {e.sourceRef.page ? ` p.${e.sourceRef.page}` : ""})
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {d.crossValidation.groupQuantityConfirmed && <p className="hint">✔ 그룹 합계 물량이 추가자료에서도 동일하게 확인되었습니다 (개별 규모에는 복사되지 않음).</p>}
             {d.crossValidation.conflicts.length > 0 && (
               <table className="photo-table">
                 <thead>

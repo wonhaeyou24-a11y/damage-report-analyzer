@@ -18,6 +18,7 @@ export type QualityEventType =
   | "photo_linked" // 사진↔손상 수동 연결
   | "photo_unlinked" // 사진↔손상 수동 해제
   | "cross_validation_resolved" // STEP8 충돌을 사용자가 해결
+  | "cross_validation_enriched" // STEP8 추가자료가 비어 있던 필드를 보완(자동, 사용자 행동 아님이지만 추후 분석을 위해 기록)
   | "bulk_reviewed" // 일괄 검수 완료(값 변경 없이 검토만 함 — "검토 후 유지")
   | "review_completed" // 세션 검수 완료
   | "finalized" // 세션 최종 확정

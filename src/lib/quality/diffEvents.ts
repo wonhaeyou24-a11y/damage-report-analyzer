@@ -103,6 +103,21 @@ export function diffRecordsForQualityEvents(reportId: string, prevRecords: Damag
       }
     }
 
+    // STEP8 추가자료 보완(enrichment) — 비어 있던 필드가 새로 채워진 항목만. 사용자 행동이
+    // 아니라 자동 보완이므로 source는 "ai"로 남기되, STEP11에서 "어떤 추가자료가 어떤 손상을
+    // 어떻게 보완했는지" 집계할 수 있도록 이벤트 자체는 기록한다(스펙 28번).
+    const prevEnrichedKeys = new Set((prev.crossValidation?.enrichments ?? []).map((e) => `${e.field}|${e.appliedAt}`));
+    for (const e of next.crossValidation?.enrichments ?? []) {
+      const key = `${e.field}|${e.appliedAt}`;
+      if (prevEnrichedKeys.has(key)) continue;
+      events.push({
+        ...baseEvent(reportId, next.id, "cross_validation_enriched", e.appliedAt, "ai"),
+        field: e.field,
+        to: e.value,
+        category: FIELD_CATEGORY[e.field],
+      });
+    }
+
     // STEP8 교차검증 충돌 해결 — conflicts[].resolved가 새로 채워진 항목만.
     const prevResolvedKeys = new Set(
       (prev.crossValidation?.conflicts ?? []).filter((c) => c.resolved).map((c) => `${c.field}|${c.resolved!.decidedAt}`)

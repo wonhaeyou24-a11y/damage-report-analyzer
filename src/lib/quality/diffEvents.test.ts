@@ -136,6 +136,25 @@ describe("diffRecordsForQualityEvents — TEST 3/4/5/6 (스펙 34번)", () => {
     expect(events[0]).toMatchObject({ type: "cross_validation_resolved", field: "location", from: "165m", to: "168m" });
   });
 
+  it("STEP8 추가자료 보완(enrichment)이 cross_validation_enriched로 기록되고 source는 ai다", () => {
+    const prev = [damage({ quantity: null, crossValidation: { enabled: true, result: "matched", confidence: 0.6, evidenceCount: 1, evidence: [], conflicts: [], reviewRequired: false, enrichments: [] } })];
+    const next: DamageRecord[] = [
+      {
+        ...prev[0],
+        quantity: "2.3m",
+        crossValidation: {
+          ...prev[0].crossValidation!,
+          enrichments: [
+            { field: "quantity", value: "2.3m", fileName: "수량표.xlsx", sourceType: "수량표", sourceRef: { fileName: "수량표.xlsx", sourceType: "수량표" }, appliedAt: "2026-01-01T00:00:00.000Z" },
+          ],
+        },
+      },
+    ];
+    const events = diffRecordsForQualityEvents("R1", prev, next);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "cross_validation_enriched", field: "quantity", to: "2.3m", source: "ai" });
+  });
+
   it("재검토(값 변경 없이 검수만 완료)는 bulk_reviewed로 구분되고 field_edited와 섞이지 않는다", () => {
     const prev = [damage({})];
     const next: DamageRecord[] = [

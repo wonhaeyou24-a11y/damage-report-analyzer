@@ -288,14 +288,35 @@ export interface CrossValidationConflict {
   resolved?: { value: string; source: "manual"; reason?: string; decidedAt: string }; // 사용자가 해결한 경우 — 재실행해도 보존됨
 }
 
+/** 필드가 비어 있어 추가자료로 보완된 경우만 만들어진다(값이 이미 있으면 절대 덮어쓰지 않음).
+ * 원본 AI 값은 계속 비어 있는 채로 fieldOverrides와 무관하게 기록되며, 사용자가 수동으로 고친
+ * 것(fieldOverrides)과는 명확히 구분한다 — 이 값은 "AI가 다시 판단한 값"이 아니라 "추가자료가
+ * 채워준 값"이다. */
+export interface CrossValidationEnrichment {
+  field: "damageName" | "subPart" | "quantity" | "repairMethod";
+  value: string;
+  fileName: string;
+  sourceType: AdditionalSourceType;
+  sourceRef: AdditionalSourceRef;
+  appliedAt: string;
+}
+
+export type CrossValidationFieldStatus = "matched" | "enriched" | "conflict" | "unknown";
+
 export interface CrossValidation {
   enabled: boolean;
   result: CrossValidationResult;
   confidence: number; // 0~1
-  evidenceCount: number;
+  evidenceCount: number; // 독립 자료(파일) 수 기준 — 같은 파일 내 반복 근거는 중복 계산하지 않는다
   evidence: CrossValidationEvidence[];
   conflicts: CrossValidationConflict[];
   reviewRequired: boolean;
+  // 아래 두 필드는 이번 확장에서 추가됨 — optional로 두어 기존 코드/테스트가 만드는
+  // CrossValidation 객체(이 필드 없이 생성됨)와 저장된 레거시 데이터 모두 그대로 동작한다.
+  // 읽을 때는 항상 enrichments ?? [], fieldValidation ?? {} 형태로 다룬다.
+  enrichments?: CrossValidationEnrichment[]; // 비어 있던 필드를 추가자료가 채운 이력
+  fieldValidation?: Partial<Record<CrossValidationConflict["field"], CrossValidationFieldStatus>>;
+  groupQuantityConfirmed?: boolean; // 그룹 합계 물량이 추가자료에서도 동일하게 확인된 경우만 true
 }
 
 /** 추가자료에서만 발견되고 기본 손상목록과 연결되지 않은 손상 후보. 사용자가 승인해야 정식 추가된다. */

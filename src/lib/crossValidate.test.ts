@@ -182,3 +182,161 @@ describe("resolveCrossValidationConflict / approveCandidateDamage — 수동 결
     expect(approved.damages[1].status).toBe("review");
   });
 });
+
+describe("STEP 8 확장 — 기존 손상 보완(enrichment)", () => {
+  it("TEST-ENRICH-02: 기존 규모 없음(개별/그룹 합계 모두 null) + 추가자료 규모 존재 -> quantity enrichment", () => {
+    const d = damage({ quantity: null, quantityGroup: null });
+    const document = doc({ candidates: [candidate({ quantity: "2.3m" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].quantity).toBe("2.3m");
+    const cv = damages[0].crossValidation!;
+    expect(cv.enrichments?.some((e) => e.field === "quantity" && e.value === "2.3m")).toBe(true);
+    expect(cv.fieldValidation?.quantity).toBe("enriched");
+  });
+
+  it("TEST-ENRICH-03: 기존 보수방안 없음 + 추가자료 보수방안 존재 -> repairMethod enrichment", () => {
+    const d = damage({ repairMethod: "" });
+    const document = doc({ candidates: [candidate({ repairMethod: "실런트 주입" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].repairMethod).toBe("실런트 주입");
+    const cv = damages[0].crossValidation!;
+    expect(cv.enrichments?.some((e) => e.field === "repairMethod" && e.value === "실런트 주입")).toBe(true);
+    expect(cv.fieldValidation?.repairMethod).toBe("enriched");
+  });
+
+  it("TEST-ENRICH-04: 기존 세부부위 없음 + 추가자료 세부부위 존재(위치 일치가 근거) -> subPart enrichment", () => {
+    const d = damage({ subPart: "-" });
+    const document = doc({ candidates: [candidate({ subPart: "소단측구", location: "165m" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].subPart).toBe("소단측구");
+    const cv = damages[0].crossValidation!;
+    expect(cv.enrichments?.some((e) => e.field === "subPart" && e.value === "소단측구")).toBe(true);
+    expect(cv.fieldValidation?.subPart).toBe("enriched");
+  });
+
+  it("TEST-ENRICH-05: 기존 위치와 추가자료 위치 동일 -> location confirmation (필드 값은 그대로)", () => {
+    const d = damage({ location: "165m" });
+    const document = doc({ candidates: [candidate({ location: "165m" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].location).toBe("165m");
+    expect(damages[0].crossValidation?.fieldValidation?.location).toBe("matched");
+  });
+
+  it("TEST-ENRICH-06: 기존 위치 165m + 추가자료 위치 170m -> location conflict, 자동 변경 없음", () => {
+    const d = damage({ location: "165m" });
+    const document = doc({ candidates: [candidate({ location: "170m" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    const cv = damages[0].crossValidation!;
+    expect(cv.conflicts.some((c) => c.field === "location")).toBe(true);
+    expect(cv.fieldValidation?.location).toBe("conflict");
+    expect(damages[0].location).toBe("165m");
+  });
+
+  it("TEST-ENRICH-07: 기존 규모 2.0m + 추가자료 규모 2.3m -> quantity conflict, 자동 변경 없음", () => {
+    const d = damage({ quantity: "2.0m", quantityGroup: null });
+    const document = doc({ candidates: [candidate({ quantity: "2.3m" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    const cv = damages[0].crossValidation!;
+    expect(cv.conflicts.some((c) => c.field === "quantity")).toBe(true);
+    expect(damages[0].quantity).toBe("2.0m");
+  });
+
+  it("TEST-ENRICH-08: 보수방안이 다르면 repairMethod conflict만 발생하고 location 등 다른 필드는 영향받지 않음", () => {
+    const d = damage({ repairMethod: "주의관찰" });
+    const document = doc({ candidates: [candidate({ repairMethod: "실런트 주입" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    const cv = damages[0].crossValidation!;
+    expect(cv.conflicts.every((c) => c.field === "repairMethod")).toBe(true);
+    expect(cv.fieldValidation?.location).toBe("matched"); // 위치는 여전히 일치로 확인됨
+  });
+
+  it("TEST-ENRICH-11: 서로 다른 추가자료 2종(외관조사망도 + 수량표)이 동일 손상을 확인하면 independent evidence 2개", () => {
+    const d = damage({});
+    const map = doc({ id: "AD001", fileName: "외관조사망도.pdf", sourceType: "외관조사망도", candidates: [candidate({})] });
+    const qty = doc({ id: "AD002", fileName: "수량표.xlsx", sourceType: "수량표", candidates: [candidate({})] });
+    const { damages } = runCrossValidation([d], [map, qty]);
+    expect(damages[0].crossValidation?.evidenceCount).toBe(2);
+  });
+
+  it("TEST-ENRICH-12: 같은 파일 안에서 동일 내용이 여러 후보(페이지/행)로 반복돼도 evidence는 1개로 계산", () => {
+    const d = damage({});
+    const document = doc({
+      candidates: [
+        candidate({ sourceRef: { fileName: "보수보강표.xlsx", sourceType: "보수보강표", sheet: "1구간", cell: "D15" } }),
+        candidate({ sourceRef: { fileName: "보수보강표.xlsx", sourceType: "보수보강표", sheet: "1구간", cell: "D28" } }), // 같은 내용, 다른 행
+      ],
+    });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].crossValidation?.evidenceCount).toBe(1);
+  });
+
+  it("TEST-ENRICH-13: 사용자가 fieldOverrides로 이미 손댄 필드는 값이 비어 있어도 enrichment가 채우지 않음", () => {
+    const d = damage({
+      repairMethod: "",
+      fieldOverrides: [{ field: "repairMethod", originalValue: "", currentValue: "", manualOverride: true, changedAt: new Date().toISOString() }],
+    });
+    const document = doc({ candidates: [candidate({ repairMethod: "실런트 주입" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].repairMethod).toBe(""); // 추가자료 값으로 채워지지 않음
+    expect(damages[0].crossValidation?.enrichments?.some((e) => e.field === "repairMethod")).toBe(false);
+  });
+
+  it("TEST-ENRICH-16: enrichments/fieldValidation이 없는 레거시 crossValidation도 재실행 시 정상 동작", () => {
+    const legacyCv = {
+      enabled: true,
+      result: "matched" as const,
+      confidence: 0.75,
+      evidenceCount: 1,
+      evidence: [],
+      conflicts: [],
+      reviewRequired: false,
+      // enrichments/fieldValidation 필드가 아예 없는 예전 저장 데이터를 흉내낸다.
+    };
+    const d = damage({ crossValidation: legacyCv });
+    const document = doc({ candidates: [candidate({})] });
+    expect(() => runCrossValidation([d], [document])).not.toThrow();
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].crossValidation?.enrichments).toEqual([]);
+  });
+
+  it("TEST-ENRICH-17: 근거가 될 문서가 추가될수록(또는 필드가 보완될수록) 신뢰도가 올라간다", () => {
+    const d1 = damage({ quantity: null, quantityGroup: null });
+    const noEnrich = runCrossValidation([d1], [doc({ candidates: [candidate({ quantity: null })] })]);
+    const d2 = damage({ quantity: null, quantityGroup: null });
+    const withEnrich = runCrossValidation([d2], [doc({ candidates: [candidate({ quantity: "2.3m" })] })]);
+    expect(withEnrich.damages[0].crossValidation!.confidence).toBeGreaterThan(noEnrich.damages[0].crossValidation!.confidence);
+  });
+
+  it("TEST-ENRICH-18: 미해결 충돌이 있으면 근거 문서가 여러 개라도 신뢰도가 임의로 올라가지 않는다", () => {
+    const d = damage({ location: "165m" });
+    const docs = [
+      doc({ id: "AD001", fileName: "a.pdf", candidates: [candidate({ location: "170m" })] }),
+      doc({ id: "AD002", fileName: "b.xlsx", candidates: [candidate({ location: "170m" })] }),
+      doc({ id: "AD003", fileName: "c.docx", candidates: [candidate({ location: "170m" })] }),
+    ];
+    const { damages } = runCrossValidation([d], docs);
+    expect(damages[0].crossValidation?.confidence).toBe(0.4);
+  });
+
+  it("TEST-ENRICH-19: 그룹 합계 물량이 추가자료에서도 확인되면 groupQuantityConfirmed=true이지만 개별 quantity는 복제되지 않는다", () => {
+    const d = damage({ quantity: null, quantityGroup: "23.3m" });
+    const document = doc({ candidates: [candidate({ quantity: "23.3m" })] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].quantity).toBeNull();
+    expect(damages[0].crossValidation?.groupQuantityConfirmed).toBe(true);
+    expect(damages[0].crossValidation?.fieldValidation?.quantity).toBe("matched");
+  });
+
+  it("TEST-ENRICH-21: STEP8 교차검증이 STEP7에서 연결된 사진 정보를 건드리지 않는다", () => {
+    const d = damage({
+      photos: [{ dataUrl: "data:img", boundingBox: null } as any],
+      photoIds: ["P001"],
+      photoMatchStatus: "confirmed",
+    });
+    const document = doc({ candidates: [candidate({})] });
+    const { damages } = runCrossValidation([d], [document]);
+    expect(damages[0].photoIds).toEqual(["P001"]);
+    expect(damages[0].photoMatchStatus).toBe("confirmed");
+    expect(damages[0].photos).toHaveLength(1);
+  });
+});
