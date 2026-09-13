@@ -75,9 +75,9 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
     <>
       {/* 사용자 요청: "최종 결과" 박스를 없애고(옆의 "최종 검토/검수"와 건수가 중복이었음),
           출력 버튼만 재분석/검수완료/최종확정 버튼 밑에 이어서 배치한다. 손상/사진 건수는
-          이미 왼쪽 "전체 손상 N건 · 사진 없음 N건" 등에 표시되므로 여기서는 반복하지 않는다. */}
-      {locked && <p className="hint">최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)</p>}
-
+          이미 왼쪽 "전체 손상 N건 · 사진 없음 N건" 등에 표시되므로 여기서는 반복하지 않는다.
+          잠김 안내 문구는 버튼이 비활성화(회색)되는 것 자체로 이미 드러나고, 아래 여백만
+          키우는 문제가 있어 없앤다 — 대신 버튼에 title로 이유를 남겨 필요할 때 확인 가능. */}
       {blockedReasons && (
         <div className="final-review-check-fail">
           <strong>최종 출력 전에 해결해야 할 항목이 있습니다:</strong>
@@ -89,7 +89,7 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
         </div>
       )}
 
-      <div className="final-output-actions">
+      <div className="final-output-actions" title={locked ? '최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)' : undefined}>
         <button onClick={() => run("excel")} disabled={locked || busy === "excel"}>
           {busy === "excel" ? "생성 중..." : "Excel 다운로드"}
           {lastResult.excel === "success" ? " ✅" : lastResult.excel === "failed" ? " ⚠" : ""}
