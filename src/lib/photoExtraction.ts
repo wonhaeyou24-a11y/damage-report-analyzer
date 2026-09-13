@@ -116,7 +116,10 @@ function nextPhotoId(): string {
  * 최대한 파싱한다. 문서에서 확인되지 않은 값은 만들어내지 않고 null로 남긴다.
  * 이미지 하나의 처리 실패가 전체 분석을 막지 않도록 개별적으로 예외를 처리한다.
  */
-export async function extractPhotosFromPdf(file: File): Promise<ExtractedPhoto[]> {
+export async function extractPhotosFromPdf(
+  file: File,
+  onProgress?: (page: number, total: number) => void
+): Promise<ExtractedPhoto[]> {
   idCounter = 0;
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -124,6 +127,7 @@ export async function extractPhotosFromPdf(file: File): Promise<ExtractedPhoto[]
   const RENDER_SCALE = 2;
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+    onProgress?.(pageNum, pdf.numPages);
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: RENDER_SCALE });
 

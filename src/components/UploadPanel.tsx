@@ -38,12 +38,26 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
       return;
     }
     setBusy(true);
+    let timer: ReturnType<typeof setInterval> | undefined;
     try {
-      setStatus("PDF에서 텍스트 추출 중...");
-      const pages = await extractPdfText(file);
+      setStatus("PDF에서 텍스트 추출 중... (0/?페이지)");
+      const pages = await extractPdfText(file, (page, total) => setStatus(`PDF에서 텍스트 추출 중... (${page}/${total}페이지)`));
       const text = formatPagesForPrompt(pages);
-      setStatus("AI로 손상 그룹 분석 중... (문서 길이에 따라 시간이 걸릴 수 있습니다)");
-      const groups = await getActiveProvider().analyzeDocument(text);
+
+      // AI 호출은 단일 응답이라 실제 진행 페이지 수 같은 건 알 수 없다 — 가짜 퍼센트를 보여주는
+      // 대신 실제 경과 시간만 보여준다(멈춘 게 아니라는 것만 알 수 있게).
+      const aiStart = Date.now();
+      setStatus("AI로 손상 그룹 분석 중... (0초 경과, 문서 길이에 따라 시간이 걸릴 수 있습니다)");
+      timer = setInterval(() => {
+        setStatus(`AI로 손상 그룹 분석 중... (${Math.round((Date.now() - aiStart) / 1000)}초 경과, 문서 길이에 따라 시간이 걸릴 수 있습니다)`);
+      }, 1000);
+      let groups;
+      try {
+        groups = await getActiveProvider().analyzeDocument(text);
+      } finally {
+        clearInterval(timer);
+        timer = undefined;
+      }
       const rawRecords = expandAllGroups(groups);
       const records = mergeDuplicates(rawRecords);
       const mergedCount = records.filter((r) => r.mergeInfo?.merged).length;
@@ -52,8 +66,10 @@ export default function UploadPanel({ onResult, onPhotosResult }: Props) {
       let photoStatusNote = "사진 추출 실패 (손상 데이터는 정상 반영됨)";
       let finalRecords = records;
       try {
-        setStatus("PDF에서 사진 후보 추출 중... (임베디드 이미지 탐색 + OCR)");
-        const photos = await extractPhotosFromPdf(file);
+        setStatus("PDF에서 사진 후보 추출 중... (0/?페이지, 임베디드 이미지 탐색 + OCR)");
+        const photos = await extractPhotosFromPdf(file, (page, total) =>
+          setStatus(`PDF에서 사진 후보 추출 중... (${page}/${total}페이지, 임베디드 이미지 탐색 + OCR)`)
+        );
         setStatus("손상-사진 자동 매칭 중...");
         const matched = matchPhotosToDamages(records, photos);
         finalRecords = matched.damages;
