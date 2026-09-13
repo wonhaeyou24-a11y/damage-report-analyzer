@@ -77,14 +77,13 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
   return (
     <div className="final-output-panel">
       <h2>최종 결과</h2>
-      <p>
+      {/* 검수 진행 상태/전체 건수는 위쪽 "최종 검토/검수"에 이미 표시된다 — 여기서는 그걸
+          반복하지 않고, 실제 출력 대상(제외된 항목 제외)만 한 줄로 보여준다. */}
+      <p className="final-output-counts">
         {session.finalReviewStatus === "finalized" ? "✓ 최종 검수 완료" : session.finalReviewStatus === "completed" ? "검수 완료 (최종 확정 전)" : "검수 진행중"}
+        {" · 출력 대상: "}
+        손상 {finalizedDamages.length}건 · 사진 {finalizedPhotos.length}건 · 교차검증 {finalizedDamages.filter((d) => !!d.crossValidation).length}건
       </p>
-      <div className="final-output-counts">
-        <span>손상 {finalizedDamages.length}건</span>
-        <span>사진 {finalizedPhotos.length}건</span>
-        <span>교차검증 {finalizedDamages.filter((d) => !!d.crossValidation).length}건</span>
-      </div>
 
       {locked && <p className="hint">최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)</p>}
 

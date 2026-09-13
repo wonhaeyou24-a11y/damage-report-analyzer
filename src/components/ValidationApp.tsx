@@ -176,12 +176,14 @@ export default function ValidationApp() {
 
   const runAll = async () => {
     setBusy(true);
-    setStatus(`전체 검증 실행 중... (${testCases.length}건)`);
-    const outcomes = await runFullValidation(testCases, (tc) => executeAnalysis(tc), {
-      engineVersion: ENGINE_VERSION,
-      promptVersion: PROMPT_VERSION,
-      ...currentProviderMeta(),
-    });
+    setStatus(`전체 검증 실행 중... (0/${testCases.length}건)`);
+    const outcomes = await runFullValidation(
+      testCases,
+      (tc) => executeAnalysis(tc),
+      { engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION, ...currentProviderMeta() },
+      undefined,
+      (done, total, testCaseId) => setStatus(`전체 검증 실행 중... (${done}/${total}건, 방금 완료: ${testCaseId})`)
+    );
     setRunsByTestCase((prev) => {
       const next = { ...prev };
       for (const o of outcomes) {

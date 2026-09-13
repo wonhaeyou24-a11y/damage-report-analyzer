@@ -94,9 +94,11 @@ export async function runFullValidation(
   testCases: TestCase[],
   executor: (testCase: TestCase) => Promise<ValidationExecutorResult>,
   meta: RunMeta,
-  thresholds?: ValidationThresholds
+  thresholds?: ValidationThresholds,
+  onProgress?: (done: number, total: number, testCaseId: string) => void
 ): Promise<FullValidationOutcome[]> {
   const outcomes: FullValidationOutcome[] = [];
+  let done = 0;
   for (const testCase of testCases) {
     try {
       if (!testCase.groundTruth) {
@@ -108,6 +110,9 @@ export async function runFullValidation(
       outcomes.push({ testCaseId: testCase.id, run });
     } catch (err: any) {
       outcomes.push({ testCaseId: testCase.id, error: err.message ?? String(err) });
+    } finally {
+      done += 1;
+      onProgress?.(done, testCases.length, testCase.id);
     }
   }
   return outcomes;

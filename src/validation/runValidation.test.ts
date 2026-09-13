@@ -95,4 +95,23 @@ describe("runFullValidation — one failing case does not stop the rest (spec se
     expect(outcomes[0].error).toBe("PDF 파싱 실패");
     expect(outcomes[1].run).toBeTruthy();
   });
+
+  it("reports progress once per test case, in order, even when one fails (for a UI progress indicator)", async () => {
+    const t1 = testCase({ id: "T001", groundTruth: createEmptyGroundTruth() });
+    const t2 = testCase({ id: "T002", groundTruth: null });
+    const t3 = testCase({ id: "T003", groundTruth: createEmptyGroundTruth() });
+    const progress: { done: number; total: number; id: string }[] = [];
+    await runFullValidation(
+      [t1, t2, t3],
+      async () => ({ aiDamages: [], aiPhotos: [], processingTimeMs: 1 }),
+      meta,
+      undefined,
+      (done, total, testCaseId) => progress.push({ done, total, id: testCaseId })
+    );
+    expect(progress).toEqual([
+      { done: 1, total: 3, id: "T001" },
+      { done: 2, total: 3, id: "T002" },
+      { done: 3, total: 3, id: "T003" },
+    ]);
+  });
 });
