@@ -26,6 +26,7 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [blockedReasons, setBlockedReasons] = useState<string[] | null>(null);
   const [lastResult, setLastResult] = useState<Record<ExportFormat, "success" | "failed" | null>>({ excel: null, word: null, pdf: null });
+  const [optionsOpen, setOptionsOpen] = useState(false);
 
   const locked = session.finalReviewStatus === "in_progress";
 
@@ -89,24 +90,30 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
         </div>
       )}
 
-      <div className="final-output-actions" title={locked ? '최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)' : undefined}>
-        <button onClick={() => run("excel")} disabled={locked || busy === "excel"}>
-          {busy === "excel" ? "생성 중..." : "Excel 다운로드"}
-          {lastResult.excel === "success" ? " ✅" : lastResult.excel === "failed" ? " ⚠" : ""}
+      {/* 사용자 요청: "출력 옵션 / 이력"을 별도 줄로 두면 위아래 여백만 늘어남 — 버튼 행
+          왼쪽의 빈 공간에 넣어 같은 줄에서 처리한다(펼쳤을 때만 아래로 내용이 늘어남). */}
+      <div className="final-output-toprow">
+        <button type="button" className="link-btn final-output-toggle" onClick={() => setOptionsOpen((o) => !o)}>
+          {optionsOpen ? "▾" : "▸"} 출력 옵션 / 이력
         </button>
-        <button onClick={() => run("word")} disabled={locked || busy === "word"}>
-          {busy === "word" ? "생성 중..." : "Word 보고서"}
-          {lastResult.word === "success" ? " ✅" : lastResult.word === "failed" ? " ⚠" : ""}
-        </button>
-        <button onClick={() => run("pdf")} disabled={locked || busy === "pdf"}>
-          {busy === "pdf" ? "생성 중..." : "PDF"}
-          {lastResult.pdf === "success" ? " ✅" : lastResult.pdf === "failed" ? " ⚠" : ""}
-        </button>
+        <div className="final-output-actions" title={locked ? '최종 검수 완료 후 결과물을 생성할 수 있습니다. (STEP9에서 "검수 완료"를 먼저 진행하세요.)' : undefined}>
+          <button onClick={() => run("excel")} disabled={locked || busy === "excel"}>
+            {busy === "excel" ? "생성 중..." : "Excel 다운로드"}
+            {lastResult.excel === "success" ? " ✅" : lastResult.excel === "failed" ? " ⚠" : ""}
+          </button>
+          <button onClick={() => run("word")} disabled={locked || busy === "word"}>
+            {busy === "word" ? "생성 중..." : "Word 보고서"}
+            {lastResult.word === "success" ? " ✅" : lastResult.word === "failed" ? " ⚠" : ""}
+          </button>
+          <button onClick={() => run("pdf")} disabled={locked || busy === "pdf"}>
+            {busy === "pdf" ? "생성 중..." : "PDF"}
+            {lastResult.pdf === "success" ? " ✅" : lastResult.pdf === "failed" ? " ⚠" : ""}
+          </button>
+        </div>
       </div>
 
-      <details className="final-output-options-details">
-        <summary className="hint">출력 옵션 / 이력</summary>
-
+      {optionsOpen && (
+        <div className="final-output-options-panel">
         <div className="final-output-options">
           <label className="checkbox">
             <input type="checkbox" checked={options.includeDamageList} onChange={(e) => setOptions({ ...options, includeDamageList: e.target.checked })} />
@@ -174,7 +181,8 @@ export default function FinalOutputPanel({ session, records, photos, candidateDa
             </ul>
           </>
         )}
-      </details>
+        </div>
+      )}
     </>
   );
 }

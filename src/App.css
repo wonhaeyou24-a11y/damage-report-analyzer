@@ -439,13 +439,23 @@ button:disabled {
   border-top: 1px solid #22345a;
 }
 
-.final-output-options-details {
-  margin-top: 10px;
+/* 사용자 요청: "출력 옵션 / 이력" 토글을 별도 줄 대신 Excel/Word/PDF 버튼 행의
+   왼쪽 여유 공간에 배치해 위아래 폭을 줄인다 — 펼쳤을 때만 아래로 내용이 늘어난다. */
+.final-output-toprow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
-.final-output-options-details summary {
-  cursor: pointer;
+.final-output-toggle {
   color: #cde8d8;
+  font-size: 13px;
+}
+
+.final-output-options-panel {
+  margin-top: -4px;
 }
 
 .final-output-options {
@@ -482,7 +492,6 @@ button:disabled {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-bottom: 12px;
 }
 
 .final-output-actions button {
