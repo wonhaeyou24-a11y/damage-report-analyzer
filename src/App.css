@@ -8,20 +8,28 @@
 
 .app-header {
   display: flex;
+  justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
 
-.app-header h1,
-.app-header .subtitle {
-  flex: 0 0 auto;
+/* 사용자 요청: 제목/부제를 좁은 폭에 담아 2줄로 자연스럽게 줄바꿈시킨다(빈 공간을
+   AI 설정 쪽에 더 몰아주기 위함). */
+.app-header .app-title-block {
+  flex: 0 1 420px;
+  min-width: 260px;
 }
 
-/* 사용자 요청: 상단 빈 공간을 활용해 AI 설정 박스를 좌우로 넓게 — 제목 영역 옆 나머지
-   너비를 전부 차지하고, 내부 항목(Provider/Key/Model/버튼)도 한 줄로 넓게 펼친다. */
+.app-header .app-title-block .subtitle {
+  word-break: keep-all;
+}
+
+/* 사용자 요청: AI 설정 박스는 화면 전체를 채우지 않고 적당한 폭으로, 내부는
+   입력 항목(1행)/버튼(2행)으로 나눠 2줄로 공간 효율적으로 배치한다. */
 .app-header .ai-settings-panel {
-  flex: 1 1 480px;
+  flex: 0 1 480px;
+  width: 480px;
   margin: 0;
   padding: 10px 16px;
 }
@@ -30,14 +38,29 @@
   font-size: 13px;
 }
 
-.app-header .ai-settings-panel .upload-row {
-  gap: 16px;
+.app-header .ai-settings-panel .ai-settings-row {
+  gap: 10px;
   align-items: flex-end;
   flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 
+.app-header .ai-settings-panel .ai-settings-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.app-header .ai-settings-panel .ai-settings-actions {
+  gap: 8px;
+}
+
+.app-header .ai-settings-panel .upload-row label {
+  flex: 1 1 120px;
+}
+
+.app-header .ai-settings-panel .upload-row select,
 .app-header .ai-settings-panel .upload-row input[type="password"] {
-  min-width: 260px;
+  width: 100%;
+  min-width: 0;
 }
 
 header h1 {

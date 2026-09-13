@@ -95,7 +95,9 @@ export default function AISettingsPanel() {
   return (
     <div className="upload-panel ai-settings-panel">
       <h3 style={{ margin: "0 0 8px" }}>AI 설정</h3>
-      <div className="upload-row">
+      {/* 사용자 요청: 한 줄에 다 펼치면 항목 사이가 너무 벌어짐 — 입력 항목(1행)과
+          버튼(2행)을 나눠 공간을 효율적으로 쓴다. */}
+      <div className="upload-row ai-settings-row">
         <label>
           Provider
           <select value={provider} onChange={(e) => changeProvider(e.target.value as ProviderId)}>
@@ -121,18 +123,23 @@ export default function AISettingsPanel() {
                 ))}
               </select>
             </label>
-            <button onClick={loadModels} disabled={loadingModels} className="secondary" type="button">
-              {loadingModels ? "모델 조회 중..." : "모델 목록 새로고침"}
-            </button>
-            <button onClick={testConnection} disabled={testState === "testing"} type="button">
-              {testState === "testing" ? "연결 테스트 중..." : "연결 테스트"}
-            </button>
-            <button onClick={resetGeminiKey} className="secondary" type="button">
-              API Key 초기화
-            </button>
           </>
         )}
       </div>
+
+      {provider === "gemini" && (
+        <div className="upload-row ai-settings-row ai-settings-actions">
+          <button onClick={loadModels} disabled={loadingModels} className="secondary" type="button">
+            {loadingModels ? "모델 조회 중..." : "모델 목록 새로고침"}
+          </button>
+          <button onClick={testConnection} disabled={testState === "testing"} type="button">
+            {testState === "testing" ? "연결 테스트 중..." : "연결 테스트"}
+          </button>
+          <button onClick={resetGeminiKey} className="secondary" type="button">
+            API Key 초기화
+          </button>
+        </div>
+      )}
 
       {provider === "gemini" && (
         <p className="status-line">

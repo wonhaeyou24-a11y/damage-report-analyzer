@@ -209,7 +209,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div>
+        <div className="app-title-block">
           <h1>보고서 손상분석 프로그램</h1>
           <p className="subtitle">손상 그룹을 개별 위치별 레코드로 분리하고, 부위/세부부위/위치를 구조화하여 검토합니다.</p>
         </div>
